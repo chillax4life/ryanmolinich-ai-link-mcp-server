@@ -1,0 +1,34 @@
+{
+  "name": "ai-link-mcp-server",
+  "version": "1.0.0",
+  "description": "MCP server for linking AI systems together",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "start": "node --env-file=.env index.js",
+    "dev": "node --env-file=.env --watch index.js"
+  },
+  "keywords": [
+    "mcp",
+    "ai",
+    "linking",
+    "model-context-protocol"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@dataconnect/generated": "file:src/dataconnect-generated",
+    "@drift-labs/sdk": "^2.38.0",
+    "@google/generative-ai": "^0.24.1",
+    "@modelcontextprotocol/sdk": "^1.0.4",
+    "@solana/web3.js": "^1.98.4",
+    "body-parser": "^2.2.1",
+    "cors": "^2.8.5",
+    "express": "^5.2.1",
+    "sqlite": "^5.1.1",
+    "sqlite3": "^5.1.7"
+  },
+  "devDependencies": {
+    "globals": "^16.5.0"
+  }
+}

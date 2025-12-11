@@ -1,0 +1,33 @@
+mutation CreateUser @auth(level: USER) {
+  user_insert(data: {
+    displayName: "New User",
+    createdAt_expr: "request.time",
+    id_expr: "uuidV4()"
+  })
+}
+
+query ListStrategies @auth(level: USER) {
+  strategies {
+    id
+    name
+    description
+    status
+  }
+}
+
+mutation UpdateStrategy($id: UUID!, $status: String!) @auth(level: USER) {
+  strategy_update(
+    key: {id: $id}
+    data: {status: $status}
+  )
+}
+
+query GetPortfolioSnapshots @auth(level: USER) {
+  portfolioSnapshots {
+    id
+    asset
+    currency
+    quantity
+    valueInUSD
+  }
+}

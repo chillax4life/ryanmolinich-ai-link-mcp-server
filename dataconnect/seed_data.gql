@@ -1,0 +1,114 @@
+mutation SeedDatabase @auth(level: PUBLIC, insecureReason: "This mutation is for seeding data and is safe to expose to the public.") {
+  user_insertMany(data: [
+    {
+      id: "550e8400-e29b-41d4-a716-446655440000",
+      createdAt: "2024-04-26T12:00:00Z",
+      displayName: "Demo User 1",
+      email: "demo1@example.com",
+      photoUrl: "https://example.com/avatar1.jpg"
+    },
+    {
+      id: "550e8400-e29b-41d4-a716-446655440001",
+      createdAt: "2024-04-26T13:00:00Z",
+      displayName: "Demo User 2",
+      email: "demo2@example.com",
+      photoUrl: "https://example.com/avatar2.jpg"
+    }
+  ])
+  exchangeConnection_insertMany(data: [
+    {
+      id: "650e8400-e29b-41d4-a716-446655440000",
+      userId: "550e8400-e29b-41d4-a716-446655440000",
+      apiKey: "apikey1",
+      apiSecret: "apisecret1",
+      createdAt: "2024-04-26T14:00:00Z",
+      exchangeName: "Binance",
+      isConnected: true
+    },
+    {
+      id: "650e8400-e29b-41d4-a716-446655440001",
+      userId: "550e8400-e29b-41d4-a716-446655440001",
+      apiKey: "apikey2",
+      apiSecret: "apisecret2",
+      createdAt: "2024-04-26T15:00:00Z",
+      exchangeName: "Coinbase",
+      isConnected: false
+    }
+  ])
+  strategy_insertMany(data: [
+    {
+      id: "750e8400-e29b-41d4-a716-446655440000",
+      exchangeConnectionId: "650e8400-e29b-41d4-a716-446655440000",
+      userId: "550e8400-e29b-41d4-a716-446655440000",
+      baseAsset: "BTC",
+      configuration: "{}",
+      createdAt: "2024-04-26T16:00:00Z",
+      description: "Simple BTC strategy",
+      name: "BTC Strategy 1",
+      status: "active",
+      targetAsset: "USD"
+    },
+    {
+      id: "750e8400-e29b-41d4-a716-446655440001",
+      exchangeConnectionId: "650e8400-e29b-41d4-a716-446655440001",
+      userId: "550e8400-e29b-41d4-a716-446655440001",
+      baseAsset: "ETH",
+      configuration: "{}",
+      createdAt: "2024-04-26T17:00:00Z",
+      description: "Simple ETH strategy",
+      name: "ETH Strategy 1",
+      status: "inactive",
+      targetAsset: "USD"
+    }
+  ])
+ portfolioSnapshot_insertMany(data: [
+    {
+      id: "850e8400-e29b-41d4-a716-446655440000",
+      exchangeConnectionId: "650e8400-e29b-41d4-a716-446655440000",
+      userId: "550e8400-e29b-41d4-a716-446655440000",
+      asset: "BTC",
+      currency: "USD",
+      quantity: 1.0,
+      timestamp: "2024-04-26T18:00:00Z",
+      valueInUSD: 60000.0
+    },
+    {
+      id: "850e8400-e29b-41d4-a716-446655440001",
+      exchangeConnectionId: "650e8400-e29b-41d4-a716-446655440001",
+      userId: "550e8400-e29b-41d4-a716-446655440001",
+      asset: "ETH",
+      currency: "USD",
+      quantity: 5.0,
+      timestamp: "2024-04-26T19:00:00Z",
+      valueInUSD: 15000.0
+    }
+  ])
+  trade_insertMany(data: [
+    {
+      id: "950e8400-e29b-41d4-a716-446655440000",
+      exchangeConnectionId: "650e8400-e29b-41d4-a716-446655440000",
+      strategyId: "750e8400-e29b-41d4-a716-446655440000",
+      userId: "550e8400-e29b-41d4-a716-446655440000",
+      asset: "BTC",
+      fee: 0.001,
+      price: 60000.0,
+      quantity: 0.5,
+      status: "filled",
+      timestamp: "2024-04-26T20:00:00Z",
+      tradeType: "buy"
+    },
+    {
+      id: "950e8400-e29b-41d4-a716-446655440001",
+      exchangeConnectionId: "650e8400-e29b-41d4-a716-446655440001",
+      strategyId: "750e8400-e29b-41d4-a716-446655440001",
+      userId: "550e8400-e29b-41d4-a716-446655440001",
+      asset: "ETH",
+      fee: 0.002,
+      price: 3000.0,
+      quantity: 2.0,
+      status: "filled",
+      timestamp: "2024-04-26T21:00:00Z",
+      tradeType: "sell"
+    }
+  ])
+}

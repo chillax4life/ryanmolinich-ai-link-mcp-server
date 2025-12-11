@@ -1,0 +1,225 @@
+{
+  "aiRegistry": [
+    [
+      "persistent-bot",
+      {
+        "aiId": "persistent-bot",
+        "name": "Persistent Bot",
+        "capabilities": [
+          "storage-test"
+        ],
+        "metadata": {},
+        "registeredAt": "2025-12-10T16:17:09.586Z"
+      }
+    ],
+    [
+      "orchestrator",
+      {
+        "aiId": "orchestrator",
+        "name": "Orchestrator",
+        "capabilities": [
+          "coordination"
+        ],
+        "metadata": {},
+        "registeredAt": "2025-12-10T16:50:44.552Z"
+      }
+    ],
+    [
+      "worker_agent",
+      {
+        "aiId": "worker_agent",
+        "name": "Task Worker",
+        "capabilities": [
+          "math",
+          "worker"
+        ],
+        "metadata": {},
+        "registeredAt": "2025-12-10T16:50:42.237Z"
+      }
+    ]
+  ],
+  "aiMessages": [
+    [
+      "persistent-bot",
+      []
+    ],
+    [
+      "orchestrator",
+      []
+    ],
+    [
+      "worker_agent",
+      []
+    ]
+  ],
+  "sharedContext": [
+    [
+      "secret-123",
+      {
+        "contextId": "secret-123",
+        "data": {
+          "secret": "The eagle has landed",
+          "timestamp": 1765383429599
+        },
+        "authorizedAiIds": [],
+        "createdAt": "2025-12-10T16:17:09.601Z",
+        "expiresAt": null
+      }
+    ]
+  ],
+  "taskQueue": [
+    [
+      "task-1765385109676-574",
+      {
+        "taskId": "task-1765385109676-574",
+        "description": "Calculate 100+50",
+        "requiredCapabilities": [
+          "math"
+        ],
+        "status": "completed",
+        "createdAt": "2025-12-10T16:45:09.676Z",
+        "assignedTo": "worker_agent",
+        "startedAt": "2025-12-10T16:45:12.193Z",
+        "result": "150",
+        "completedAt": "2025-12-10T16:45:12.198Z"
+      }
+    ],
+    [
+      "task-1765385444566-36",
+      {
+        "taskId": "task-1765385444566-36",
+        "description": "Calculate 100+50",
+        "requiredCapabilities": [
+          "math"
+        ],
+        "status": "completed",
+        "createdAt": "2025-12-10T16:50:44.566Z",
+        "assignedTo": "worker_agent",
+        "startedAt": "2025-12-10T16:50:46.251Z",
+        "result": "150",
+        "completedAt": "2025-12-10T16:50:46.257Z"
+      }
+    ],
+    {
+      "taskId": "task-1765449544334-839",
+      "description": "Calculate 1234 + 4321",
+      "requiredCapabilities": [
+        "math"
+      ],
+      "status": "completed",
+      "createdAt": "2025-12-11T10:39:04.336Z",
+      "assignedTo": "worker_agent",
+      "startedAt": "2025-12-11T10:39:08.781Z",
+      "result": "5555",
+      "completedAt": "2025-12-11T10:39:08.785Z"
+    },
+    {
+      "taskId": "task-1765449592828-888",
+      "description": "Calculate 1234 + 4321",
+      "requiredCapabilities": [
+        "math"
+      ],
+      "status": "completed",
+      "createdAt": "2025-12-11T10:39:52.829Z",
+      "assignedTo": "worker_agent",
+      "startedAt": "2025-12-11T10:39:56.675Z",
+      "result": "5555",
+      "completedAt": "2025-12-11T10:39:56.680Z"
+    },
+    {
+      "taskId": "task-1765449654608-868",
+      "description": "Calculate 1234 + 4321",
+      "requiredCapabilities": [
+        "math"
+      ],
+      "status": "completed",
+      "createdAt": "2025-12-11T10:40:54.609Z",
+      "assignedTo": "worker_agent",
+      "startedAt": "2025-12-11T10:40:58.760Z",
+      "result": "5555",
+      "completedAt": "2025-12-11T10:40:58.763Z"
+    },
+    {
+      "taskId": "task-1765449729952-762",
+      "description": "Calculate 1234 + 4321",
+      "requiredCapabilities": [
+        "math"
+      ],
+      "status": "completed",
+      "createdAt": "2025-12-11T10:42:09.954Z",
+      "assignedTo": "worker_agent",
+      "startedAt": "2025-12-11T10:42:14.263Z",
+      "result": "5555",
+      "completedAt": "2025-12-11T10:42:14.268Z"
+    },
+    {
+      "taskId": "task-1765451477842-295",
+      "description": "Research Mango Markets flash loan API: Find SDK documentation, program IDs, and code examples for executing flash loans on Solana devnet. Determine if 0% fee is confirmed and document the CPI interface.",
+      "requiredCapabilities": [
+        "research",
+        "documentation"
+      ],
+      "status": "pending",
+      "createdAt": "2025-12-11T11:11:17.859Z"
+    },
+    {
+      "taskId": "task-1765451479531-717",
+      "description": "Research Raydium V4 AMM SDK: Find Rust crate or TypeScript SDK for reading pool states and executing swaps via CPI. Document the instruction format and required accounts.",
+      "requiredCapabilities": [
+        "research",
+        "solana"
+      ],
+      "status": "pending",
+      "createdAt": "2025-12-11T11:11:19.589Z"
+    },
+    {
+      "taskId": "task-1765451479620-561",
+      "description": "Research Orca Whirlpool SDK: Find Rust crate for reading concentrated liquidity pool states and executing swaps. Document CLMM tick math and swap instruction format.",
+      "requiredCapabilities": [
+        "research",
+        "solana"
+      ],
+      "status": "pending",
+      "createdAt": "2025-12-11T11:11:19.623Z"
+    },
+    {
+      "taskId": "task-1765455068673-256",
+      "description": "Calculate 1234 + 4321",
+      "requiredCapabilities": [
+        "math"
+      ],
+      "status": "completed",
+      "createdAt": "2025-12-11T12:11:08.674Z",
+      "assignedTo": "worker_agent",
+      "startedAt": "2025-12-11T12:11:12.840Z",
+      "result": "5555",
+      "completedAt": "2025-12-11T12:11:12.848Z"
+    },
+    {
+      "taskId": "task-1765455688791-666",
+      "description": "Calculate 1234 + 4321",
+      "requiredCapabilities": [
+        "math"
+      ],
+      "status": "completed",
+      "createdAt": "2025-12-11T12:21:28.792Z",
+      "assignedTo": "worker_agent",
+      "startedAt": "2025-12-11T12:21:29.194Z",
+      "result": "5555",
+      "completedAt": "2025-12-11T12:21:29.197Z"
+    },
+    {
+      "taskId": "task-1765455721401-835",
+      "description": "Calculate 1234 + 4321",
+      "requiredCapabilities": [
+        "math"
+      ],
+      "status": "completed",
+      "createdAt": "2025-12-11T12:22:01.402Z",
+      "assignedTo": "worker_agent",
+      "startedAt": "2025-12-11T12:22:03.211Z",
+      "result": "5555",
+      "completedAt": "2025-12-11T12:22:03.213Z"
+    }
+  ]
+}

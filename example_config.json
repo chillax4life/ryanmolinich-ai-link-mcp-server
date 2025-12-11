@@ -1,0 +1,27 @@
+{
+  "mcpServers": {
+    "ai-link": {
+      "command": "node",
+      "args": [
+        "/Users/ryanmolinich/ai-link-mcp-server/index.js"
+      ]
+    },
+    "context7": {
+      "serverUrl": "https://mcp.context7.com/mcp",
+      "headers": {
+        "CONTEXT7_API_KEY": "ctx7sk-b0b06e28-eeb4-4cde-9223-102924b740d4"
+      }
+    },
+    "github": {
+      "serverUrl": "https://github.com",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-github"
+      ],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "<YOUR_GITHUB_TOKEN>"
+      }
+    }
+  }
+}

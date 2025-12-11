@@ -1,0 +1,183 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Link Network Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        body { background-color: #f8f9fa; }
+        .agent-card { transition: transform 0.2s; }
+        .agent-card:hover { transform: translateY(-5px); }
+        .status-badge { position: absolute; top: 10px; right: 10px; }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-dark bg-dark">
+        <div class="container-fluid">
+            <span class="navbar-brand mb-0 h1"><i class="fas fa-network-wired"></i> AI Link MCP Network</span>
+            <span class="navbar-text text-light" id="connection-status">Connecting...</span>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <!-- Stats Row -->
+        <div class="row mb-4">
+            <div class="col-md-4">
+                <div class="card text-white bg-primary mb-3">
+                    <div class="card-body">
+                        <h5 class="card-title">Active Agents</h5>
+                        <p class="card-text display-4" id="stat-agents">0</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card text-white bg-success mb-3">
+                    <div class="card-body">
+                        <h5 class="card-title">Tasks Completed</h5>
+                        <p class="card-text display-4" id="stat-completed">0</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card text-white bg-warning text-dark mb-3">
+                    <div class="card-body">
+                        <h5 class="card-title">Pending Tasks</h5>
+                        <p class="card-text display-4" id="stat-pending">0</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- content grid -->
+        <div class="row">
+            <!-- Agents List -->
+            <div class="col-md-12 mb-4">
+                <div class="card shadow">
+                    <div class="card-header bg-white">
+                        <h5 class="mb-0"><i class="fas fa-robot"></i> Agent Registry</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row" id="agents-grid">
+                            <!-- filled by js -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Task Queue -->
+            <div class="col-md-12">
+                <div class="card shadow">
+                    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0"><i class="fas fa-tasks"></i> Global Task Queue</h5>
+                        <span class="badge bg-secondary" id="queue-count">0</span>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>Description</th>
+                                        <th>Status</th>
+                                        <th>Assigned To</th>
+                                        <th>Capabilities</th>
+                                        <th>Created</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tasks-table">
+                                    <!-- filled by js -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_KEY = 'ai-link-secure-key'; // Default
+        const REFRESH_RATE = 2000;
+
+        async function fetchData(endpoint) {
+            try {
+                const res = await fetch(endpoint, {
+                    headers: { 'x-api-key': API_KEY }
+                });
+                if (!res.ok) throw new Error(res.statusText);
+                return await res.json();
+            } catch (e) {
+                console.error("Fetch error:", e);
+                document.getElementById('connection-status').textContent = "Offline";
+                document.getElementById('connection-status').className = "navbar-text text-danger";
+                return null;
+            }
+        }
+
+        async function updateDashboard() {
+            // Agents
+            const agentsData = await fetchData('/api/agents');
+            if (agentsData) {
+                document.getElementById('connection-status').textContent = "Online";
+                document.getElementById('connection-status').className = "navbar-text text-success";
+                document.getElementById('stat-agents').textContent = agentsData.count;
+                
+                const grid = document.getElementById('agents-grid');
+                grid.innerHTML = agentsData.agents.map(ai => `
+                    <div class="col-md-4 col-lg-3 mb-3">
+                        <div class="card agent-card h-100 border-start border-4 border-info">
+                            <div class="card-body">
+                                <span class="badge bg-success status-badge">Active</span>
+                                <h6 class="card-title fw-bold text-truncate">${ai.name}</h6>
+                                <p class="card-subtitle text-muted small mb-2">${ai.aiId}</p>
+                                <div class="mt-2">
+                                    ${ai.capabilities.map(c => `<span class="badge bg-light text-dark border me-1 mb-1">${c}</span>`).join('')}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+            }
+
+            // Tasks
+            const tasksData = await fetchData('/api/tasks');
+            if (tasksData) {
+                const tasks = tasksData.tasks;
+                const completed = tasks.filter(t => t.status === 'completed').length;
+                const pending = tasks.filter(t => t.status === 'pending').length;
+
+                document.getElementById('stat-completed').textContent = completed;
+                document.getElementById('stat-pending').textContent = pending;
+                document.getElementById('queue-count').textContent = tasks.length;
+
+                const table = document.getElementById('tasks-table');
+                // Show latest first
+                const sortedTasks = [...tasks].sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt));
+                
+                table.innerHTML = sortedTasks.map(t => {
+                    let statusClass = 'bg-secondary';
+                    if (t.status === 'pending') statusClass = 'bg-warning text-dark';
+                    if (t.status === 'in-progress') statusClass = 'bg-primary';
+                    if (t.status === 'completed') statusClass = 'bg-success';
+
+                    return `
+                    <tr>
+                        <td class="small font-monospace text-muted">${t.taskId.substring(5, 15)}...</td>
+                        <td>${t.description}</td>
+                        <td><span class="badge ${statusClass}">${t.status}</span></td>
+                        <td>${t.assignedTo || '<span class="text-muted">-</span>'}</td>
+                        <td>${(t.requiredCapabilities||[]).join(', ')}</td>
+                        <td class="small text-muted">${new Date(t.createdAt).toLocaleTimeString()}</td>
+                    </tr>
+                `}).join('');
+            }
+        }
+
+        setInterval(updateDashboard, REFRESH_RATE);
+        updateDashboard();
+    </script>
+</body>
+</html>

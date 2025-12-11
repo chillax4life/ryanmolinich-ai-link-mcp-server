@@ -1,0 +1,30 @@
+[package]
+name = "scanner-bot"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "scanner"
+path = "src/main.rs"
+
+[dependencies]
+solana-client = { workspace = true }
+solana-sdk = { workspace = true }
+tokio = { workspace = true }
+async-trait = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+anyhow = { workspace = true }
+
+# Local workspace dependencies
+rpc-manager = { path = "../rpc-manager" }
+swap-router = { path = "../swap-router" }
+price-fetcher = { path = "../price-fetcher" }
+
+# Configuration
+dotenvy = "0.15"
+
+# HTTP client for price APIs
+reqwest = { workspace = true }

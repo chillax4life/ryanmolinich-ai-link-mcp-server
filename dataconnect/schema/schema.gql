@@ -1,0 +1,50 @@
+type User @table {
+  displayName: String!
+  createdAt: Timestamp!
+  email: String
+  photoUrl: String
+}
+
+type ExchangeConnection @table {
+  user: User!
+  exchangeName: String!
+  apiKey: String!
+  apiSecret: String!
+  createdAt: Timestamp!
+  isConnected: Boolean
+}
+
+type Strategy @table {
+  user: User!
+  exchangeConnection: ExchangeConnection!
+  name: String!
+  createdAt: Timestamp!
+  status: String!
+  description: String
+  targetAsset: String
+  baseAsset: String
+  configuration: String
+}
+
+type Trade @table {
+  user: User!
+  strategy: Strategy!
+  exchangeConnection: ExchangeConnection!
+  tradeType: String!
+  asset: String!
+  quantity: Float!
+  price: Float!
+  timestamp: Timestamp!
+  status: String
+  fee: Float
+}
+
+type PortfolioSnapshot @table {
+  user: User!
+  exchangeConnection: ExchangeConnection!
+  timestamp: Timestamp!
+  asset: String!
+  quantity: Float!
+  valueInUSD: Float!
+  currency: String
+}
