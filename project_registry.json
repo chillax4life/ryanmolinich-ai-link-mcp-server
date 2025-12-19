@@ -1,0 +1,9 @@
+{
+    "yellowstone": "/Users/ryanmolinich/yellowstone-fumarole",
+    "certora-tools": "/Users/ryanmolinich/platform-tools-certora",
+    "manifest": "/Users/ryanmolinich/manifest",
+    "kamino-scope": "/Users/ryanmolinich/Kamino-Scope",
+    "helius-proxy": "/Users/ryanmolinich/helius-rpc-proxy",
+    "flash-perpetuals": "/Users/ryanmolinich/flash-perpetuals",
+    "flash-sdk": "/Users/ryanmolinich/flash-sdk-rust"
+}

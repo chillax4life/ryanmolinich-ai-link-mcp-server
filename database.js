@@ -9,6 +9,8 @@ export async function initDatabase() {
         driver: sqlite3.Database
     });
 
+    await db.exec('PRAGMA journal_mode = WAL;');
+
     await db.exec(`
     CREATE TABLE IF NOT EXISTS ai_registry (
       aiId TEXT PRIMARY KEY,
@@ -50,7 +52,7 @@ export async function initDatabase() {
     );
   `);
 
-    console.log('Database initialized');
+    console.log('Database initialized (WAL mode)');
 }
 
 export async function getDb() {
@@ -139,4 +141,28 @@ export async function getAllTasks() {
         ...t,
         requiredCapabilities: JSON.parse(t.requiredCapabilities)
     }));
+}
+
+// Helpers for Contexts
+export async function saveContext(context) {
+    const database = await getDb();
+    await database.run(
+        `INSERT OR REPLACE INTO contexts (contextId, data, authorizedAiIds, createdAt, expiresAt) VALUES (?, ?, ?, ?, ?)`,
+        context.contextId, JSON.stringify(context.data), JSON.stringify(context.authorizedAiIds || []), context.createdAt, context.expiresAt
+    );
+}
+
+export async function getContext(contextId) {
+    const database = await getDb();
+    const context = await database.get('SELECT * FROM contexts WHERE contextId = ?', contextId);
+    if (context) {
+        context.data = JSON.parse(context.data);
+        context.authorizedAiIds = JSON.parse(context.authorizedAiIds);
+    }
+    return context;
+}
+
+export async function deleteContext(contextId) {
+    const database = await getDb();
+    await database.run('DELETE FROM contexts WHERE contextId = ?', contextId);
 }

@@ -2,8 +2,14 @@ import express from 'express';
 import cors from 'cors';
 import bodyParser from 'body-parser';
 
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
 // Security Configuration
 const API_KEY = process.env.AI_LINK_API_KEY || 'ai-link-secure-key';
@@ -11,44 +17,50 @@ const API_KEY = process.env.AI_LINK_API_KEY || 'ai-link-secure-key';
 // Middleware
 app.use(cors());
 app.use(bodyParser.json());
-app.use(express.static('public')); // Serve dashboard files
+// Use absolute path to ensure 'public' is found regardless of CWD
+app.use(express.static(path.join(__dirname, 'public')));
 
 // Authentication Middleware
 const authMiddleware = (req, res, next) => {
     const apiKey = req.headers['x-api-key'];
 
-    // Allow public access to root for health checks, or require auth for everything?
-    // Let's require auth for everything except potentially a simple health endpoint if needed.
-    // For now, strict security:
-    if (req.path === '/' && req.method === 'GET') {
-        return next(); // Allow root to be a public landing/health check
+    // Allow root (dashboard) and static assets (handled by express.static above) 
+    // to bypass auth if we want public dashboard?
+    // Actually, express.static is BEFORE this middleware, so it's already public.
+    // We only need to protect API routes.
+
+    // Explicitly allow health check
+    if (req.path === '/api/health' && req.method === 'GET') {
+        return next();
     }
 
-    if (!apiKey || apiKey !== API_KEY) {
-        return res.status(401).json({
-            error: 'Unauthorized',
-            message: 'Invalid or missing x-api-key header.'
-        });
+    // Checking if it's an API call
+    if (req.path.startsWith('/api')) {
+        if (!apiKey || apiKey !== API_KEY) {
+            return res.status(401).json({
+                error: 'Unauthorized',
+                message: 'Invalid or missing x-api-key header.'
+            });
+        }
     }
+
     next();
 };
 
 app.use(authMiddleware);
 
-import { withLock, loadData } from './persistence.js';
+import { getAllAIs, getAllTasks, getMessages, saveMessage } from './database.js';
 
 // Routes
-app.get('/', (req, res) => {
+// Renamed root handler to /api/health so it doesn't shadow index.html
+app.get('/api/health', (req, res) => {
     res.send('AI Link API Server is running. Authentication enabled.');
 });
 
 // --- Dashboard API Endpoints ---
 app.get('/api/agents', async (req, res) => {
     try {
-        const agents = await withLock(async () => {
-            const data = await loadData();
-            return Object.values(data.aiRegistry || {});
-        });
+        const agents = await getAllAIs();
         res.json({ count: agents.length, agents });
     } catch (e) {
         res.status(500).json({ error: e.message });
@@ -57,11 +69,43 @@ app.get('/api/agents', async (req, res) => {
 
 app.get('/api/tasks', async (req, res) => {
     try {
-        const tasks = await withLock(async () => {
-            const data = await loadData();
-            return data.taskQueue || [];
-        });
+        const tasks = await getAllTasks();
         res.json({ count: tasks.length, tasks });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// --- Chat API ---
+app.get('/api/messages', async (req, res) => {
+    const { aiId } = req.query;
+    if (!aiId) return res.status(400).json({ error: 'Missing aiId query param' });
+
+    try {
+        // Fetch last 50 messages for this AI (or from this AI)
+        // Ideally getMessages should support filtering, but for now we fetch for the AI
+        const messages = await getMessages(aiId, false);
+        res.json({ count: messages.length, messages });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.post('/api/chat', async (req, res) => {
+    const { from, to, message } = req.body;
+    if (!from || !to || !message) return res.status(400).json({ error: 'Missing fields' });
+
+    try {
+        await saveMessage({
+            fromAiId: from,
+            toAiId: to,
+            message: message,
+            messageType: 'request',
+            metadata: { source: 'web_dashboard' },
+            timestamp: new Date().toISOString(),
+            read: false
+        });
+        res.json({ success: true });
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
@@ -71,10 +115,30 @@ app.get('/api/tasks', async (req, res) => {
 app.get('/status', (req, res) => {
     res.json({ status: 'online', authenticated: true });
 });
+// --- Remote Agent Registration ---
+app.post('/api/register_agent', async (req, res) => {
+    const { aiId, name, capabilities, metadata } = req.body;
+    if (!aiId || !name) return res.status(400).json({ error: 'Missing aiId or name' });
+
+    try {
+        await import('./database.js').then(db => db.registerAI({
+            aiId,
+            name,
+            capabilities: capabilities || ['remote-worker'],
+            metadata: { ...metadata, type: 'remote' }
+        }));
+        console.log(`[System] Remote Agent Registered: ${name} (${aiId})`);
+        res.json({ success: true, message: 'Agent connected to Hive Mind' });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 export function startApiServer() {
     return new Promise((resolve) => {
-        app.listen(PORT, () => {
+        app.listen(PORT, '0.0.0.0', () => {
             console.error(`🔒 API Server running on port ${PORT}`);
+            console.error(`🌍 Remote Access Enabled: Listening on 0.0.0.0`);
             if (!process.env.AI_LINK_API_KEY) {
                 console.warn('⚠️  WARNING: Using default API Key "ai-link-secure-key". Set AI_LINK_API_KEY env var to secure.');
             }

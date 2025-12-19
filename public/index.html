@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Link Node | Premium Dashboard</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;600&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar: Agent Status -->
+        <aside class="sidebar">
+            <div class="logo-area">
+                <h1>AI LINK <span class="node-id">NODE-01</span></h1>
+            </div>
+            
+            <div class="agents-list" id="agentsList">
+                <!-- Injected via JS -->
+                <div class="agent-card skeleton"></div>
+                <div class="agent-card skeleton"></div>
+            </div>
+
+            <div class="system-stats">
+                <div class="stat-item">
+                    <span class="label">STATUS</span>
+                    <span class="value alive">ONLINE</span>
+                </div>
+                <div class="stat-item">
+                    <span class="label">NET</span>
+                    <span class="value">DEVNET</span>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Chat Area -->
+        <main class="chat-interface">
+            <header class="chat-header">
+                <h2>COMMAND CHANNEL</h2>
+                <div class="connection-status" id="connStatus">CONNECTED</div>
+            </header>
+
+            <div class="messages-container" id="messagesContainer">
+                <div class="message system">
+                    <div class="bubble">System initialized. Welcome, Operator.</div>
+                </div>
+                <!-- Messages injected here -->
+            </div>
+
+            <footer class="input-area">
+                <input type="text" id="chatInput" placeholder="Command the Swarm... (e.g. 'Check SOL price', 'Open Long')" autocomplete="off">
+                <button id="sendBtn">SEND</button>
+            </footer>
+        </main>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

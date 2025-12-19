@@ -1,23 +1,44 @@
-/**
- * Base Agent Framework
- * 
- * Provides the foundation for creating specialized agents that connect
- * to the AI Link MCP Server.
- */
-export class Agent {
-    constructor(config) {
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+
+export interface AgentConfig {
+    aiId: string;
+    name: string;
+    capabilities?: string[];
+    metadata?: Record<string, any>;
+}
+
+export interface Message {
+    from: string;
+    to: string;
+    message: string;
+    type: 'request' | 'response' | 'notification' | 'data';
+    metadata?: any;
+    timestamp?: number;
+}
+
+export interface ReadMessagesResponse {
+    messageCount: number;
+    messages: Message[];
+}
+
+export abstract class Agent {
+    public aiId: string;
+    public name: string;
+    public capabilities: string[];
+    public metadata: Record<string, any>;
+    public client: Client | null = null;
+
+    constructor(config: AgentConfig) {
         this.aiId = config.aiId;
         this.name = config.name;
         this.capabilities = config.capabilities || [];
         this.metadata = config.metadata || {};
-        this.client = null; // MCP Client instance
     }
 
     /**
      * Initialize and register the agent with the server
-     * @param {Object} client - Connected MCP client instance
      */
-    async initialize(client) {
+    async initialize(client: Client) {
         this.client = client;
         console.log(`[${this.name}] Registering...`);
 
@@ -38,13 +59,15 @@ export class Agent {
         if (!this.client) return;
 
         try {
-            const response = await this.callTool('read_messages', {
+            const result = await this.callTool('read_messages', {
                 aiId: this.aiId,
                 unreadOnly: true,
                 markAsRead: true
             });
 
-            const data = JSON.parse(response);
+            // The tool returns a JSON string, need to parse it
+            // Adjust depending on actual server implementation; assuming string return
+            const data: ReadMessagesResponse = typeof result === 'string' ? JSON.parse(result) : result;
 
             if (data.messageCount > 0) {
                 console.log(`[${this.name}] Received ${data.messageCount} messages.`);
@@ -52,27 +75,24 @@ export class Agent {
                     await this.handleMessage(msg);
                 }
             }
-        } catch (error) {
+        } catch (error: any) {
             console.error(`[${this.name}] Error checking messages:`, error.message);
         }
     }
 
     /**
      * Handle an incoming message
-     * @param {Object} msg - The message object
      */
-    async handleMessage(msg) {
-        console.log(`[${this.name}] Processing message from ${msg.fromAiId || msg.from}: "${(msg.message || '').substring(0, 50)}..."`);
+    async handleMessage(msg: Message) {
+        // console.log(`[${this.name}] Processing message from ${msg.from}:`, msg.message); // verbose
 
-        const type = msg.messageType || msg.type;
-
-        if (type === 'request') {
+        if (msg.type === 'request') {
             try {
                 const result = await this.processRequest(msg.message, msg.metadata);
 
                 // Send response back
                 await this.sendMessage(msg.from, result, 'response');
-            } catch (error) {
+            } catch (error: any) {
                 console.error(`[${this.name}] Processing error:`, error);
                 await this.sendMessage(msg.from, `Error: ${error.message}`, 'response');
             }
@@ -81,17 +101,13 @@ export class Agent {
 
     /**
      * Abstract method to be implemented by subclasses
-     * @param {string} prompt - The request content
-     * @param {Object} metadata - Additional context
      */
-    async processRequest(prompt, metadata) {
-        throw new Error('processRequest must be implemented by subclass');
-    }
+    abstract processRequest(prompt: string, metadata?: any): Promise<string>;
 
     /**
      * Helper to send a message
      */
-    async sendMessage(toAiId, message, type = 'request', metadata = {}) {
+    async sendMessage(toAiId: string, message: string | object, type: 'request' | 'response' | 'notification' = 'request', metadata: any = {}) {
         await this.callTool('send_message', {
             fromAiId: this.aiId,
             toAiId,
@@ -105,8 +121,15 @@ export class Agent {
     /**
      * Helper to execute MCP tool calls
      */
-    async callTool(name, args) {
-        const result = await this.client.callTool({ name, arguments: args });
-        return result.content[0].text;
+    async callTool(name: string, args: Record<string, any>): Promise<any> {
+        if (!this.client) throw new Error("Client not initialized");
+        const result: any = await this.client.callTool({ name, arguments: args });
+
+        // MCP SDK result structure: content is an array of content objects
+        // We assume text content for these tools
+        if (result.content && result.content.length > 0 && result.content[0].type === 'text') {
+            return result.content[0].text;
+        }
+        return result;
     }
 }

@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>AI Satellite Node</title>
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --text-color: #e2e8f0;
+            --accent-color: #3b82f6;
+            --success-color: #22c55e;
+            --error-color: #ef4444;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            box-sizing: border-box;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .status-dot {
+            height: 12px;
+            width: 12px;
+            background-color: #64748b;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 8px;
+            box-shadow: 0 0 10px rgba(100, 116, 139, 0.5);
+        }
+
+        .status-dot.connected {
+            background-color: var(--success-color);
+            box-shadow: 0 0 15px var(--success-color);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% {
+                box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7);
+            }
+
+            70% {
+                box-shadow: 0 0 0 10px rgba(34, 197, 94, 0);
+            }
+
+            100% {
+                box-shadow: 0 0 0 0 rgba(34, 197, 94, 0);
+            }
+        }
+
+        .card {
+            background-color: #1e293b;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+
+        .input-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-size: 0.9em;
+            color: #94a3b8;
+        }
+
+        input {
+            width: 100%;
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid #334155;
+            background-color: #0f172a;
+            color: white;
+            font-size: 16px;
+            /* Prevents zoom on iOS */
+            box-sizing: border-box;
+        }
+
+        button {
+            width: 100%;
+            padding: 14px;
+            border-radius: 8px;
+            border: none;
+            background-color: var(--accent-color);
+            color: white;
+            font-weight: bold;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        button:active {
+            background-color: #2563eb;
+        }
+
+        button:disabled {
+            background-color: #475569;
+            cursor: not-allowed;
+        }
+
+        #log {
+            flex-grow: 1;
+            background-color: #1e293b;
+            border-radius: 12px;
+            padding: 15px;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 0.85em;
+            overflow-y: auto;
+            border: 1px solid #334155;
+        }
+
+        .log-entry {
+            margin-bottom: 8px;
+            border-bottom: 1px solid #334155;
+            padding-bottom: 4px;
+        }
+
+        .log-entry.rx {
+            color: #60a5fa;
+        }
+
+        .log-entry.tx {
+            color: #4ade80;
+        }
+
+        .log-entry.err {
+            color: #f87171;
+        }
+
+        .log-timestamp {
+            color: #64748b;
+            font-size: 0.8em;
+            margin-right: 5px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="header">
+        <h1>Satellite Node <span id="statusDot" class="status-dot"></span></h1>
+        <div id="statusText" style="color: #94a3b8; font-size: 0.9em;">Disconnected</div>
+    </div>
+
+    <!-- Connection Config -->
+    <div id="configPanel" class="card">
+        <div class="input-group">
+            <label>Node Name</label>
+            <input type="text" id="nodeName" placeholder="e.g., iPhone-15-Pro">
+        </div>
+        <div class="input-group">
+            <label>Master IP (Host)</label>
+            <input type="text" id="masterUrl" value="">
+        </div>
+        <button id="connectBtn" onclick="connect()">Initialize Link</button>
+    </div>
+
+    <!-- Active Worker Panel (Hidden initially) -->
+    <div id="workerPanel" class="card" style="display: none;">
+        <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+            <div style="font-weight: bold;">NODE ID</div>
+            <div id="nodeIdDisplay" style="color: #94a3b8; font-family: monospace;">...</div>
+        </div>
+        <div style="font-size: 0.9em; color: #94a3b8;">
+            Capabilities: <span style="color: var(--accent-color);">Mobile-Compute, Web-Fetch</span>
+        </div>
+    </div>
+
+    <div id="log">
+        <div class="log-entry"><span class="log-timestamp">SYSTEM</span> Ready for initialization...</div>
+    </div>
+
+    <script>
+        // Auto-detect Host if possible
+        document.getElementById('masterUrl').value = window.location.origin;
+        document.getElementById('nodeName').value = `Mobile-${navigator.platform.replace(/ /g, '-')}`;
+
+        let AI_ID = `mobile-${Math.random().toString(36).substring(7)}`;
+        let POLLING_INTERVAL = null;
+        const API_KEY = 'ai-link-secure-key'; // Hardcoded for this demo, usually user input
+
+        function log(msg, type = 'sys') {
+            const div = document.createElement('div');
+            div.className = `log-entry ${type}`;
+            const time = new Date().toLocaleTimeString().split(' ')[0];
+            div.innerHTML = `<span class="log-timestamp">${time}</span> ${msg}`;
+            const container = document.getElementById('log');
+            container.appendChild(div);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        async function connect() {
+            const btn = document.getElementById('connectBtn');
+            const name = document.getElementById('nodeName').value;
+            const host = document.getElementById('masterUrl').value;
+
+            if (!name) return alert("Enter a Node Name");
+
+            btn.disabled = true;
+            btn.innerText = "Registering...";
+
+            log(`Attempting handshake with ${host}...`);
+
+            try {
+                const res = await fetch(`${host}/api/register_agent`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-api-key': API_KEY
+                    },
+                    body: JSON.stringify({
+                        aiId: AI_ID,
+                        name: name,
+                        capabilities: ['mobile-worker', 'web-fetch'],
+                        metadata: {
+                            userAgent: navigator.userAgent,
+                            platform: navigator.platform
+                        }
+                    })
+                });
+
+                const data = await res.json();
+
+                if (data.success) {
+                    log("✅ Registration Successful!");
+                    activateUI(name, host);
+                    startPolling(host);
+                } else {
+                    throw new Error(data.error || "Registration rejected");
+                }
+
+            } catch (e) {
+                log(`❌ Connection Error: ${e.message}`, 'err');
+                btn.disabled = false;
+                btn.innerText = "Initialize Link";
+            }
+        }
+
+        function activateUI(name, host) {
+            document.getElementById('configPanel').style.display = 'none';
+            document.getElementById('workerPanel').style.display = 'block';
+            document.getElementById('statusDot').classList.add('connected');
+            document.getElementById('statusText').innerText = "Online & Listening";
+            document.getElementById('statusText').style.color = "#22c55e";
+            document.getElementById('nodeIdDisplay').innerText = AI_ID;
+
+            // Keep screen awake? (Hack: play silent video or rely on user settings)
+            log(`Satellite Node "${name}" Active.`);
+        }
+
+        function startPolling(host) {
+            POLLING_INTERVAL = setInterval(async () => {
+                try {
+                    const res = await fetch(`${host}/api/messages?aiId=${AI_ID}&unreadOnly=true`);
+                    const data = await res.json();
+
+                    if (data.messages && data.messages.length > 0) {
+                        for (const msg of data.messages) {
+                            handleMessage(host, msg);
+                        }
+                    }
+                } catch (e) {
+                    // Fail silently or show error dot
+                }
+            }, 2000); // 2s polling to save battery
+        }
+
+        async function handleMessage(host, msg) {
+            log(`📥 CMD: ${msg.message}`, 'rx');
+
+            // Simulate Work
+            let response = `Task Complete: "${msg.message}" (from ${AI_ID})`;
+
+            if (msg.message.toLowerCase().includes('scan')) {
+                log("Running Web Scan...", 'sys');
+                await new Promise(r => setTimeout(r, 1500)); // Fake work
+                response = "Web Scan Complete. No threats detected.";
+            }
+
+            // Reply
+            try {
+                await fetch(`${host}/api/chat`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-api-key': API_KEY
+                    },
+                    body: JSON.stringify({
+                        from: AI_ID,
+                        to: msg.fromAiId,
+                        message: response,
+                        messageType: 'response'
+                    })
+                });
+                log(`📤 Sent: ${response}`, 'tx');
+            } catch (e) {
+                log(`Failed to reply: ${e.message}`, 'err');
+            }
+        }
+    </script>
+</body>
+
+</html>

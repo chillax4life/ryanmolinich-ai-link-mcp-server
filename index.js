@@ -2,17 +2,42 @@
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { Keypair } from '@solana/web3.js';
+import fs from 'fs';
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
   ListResourcesRequestSchema,
-  ReadResourceRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 
 import { startApiServer } from './api_server.js';
 import { solanaTools, handleSolanaTool } from './solana_tools.js';
 import { driftTools, handleDriftTool } from './drift_tools.js';
-import { withLock, loadData, saveData, DEFAULT_STATE } from './persistence.js';
+import { duneTools, handleDuneTool } from './dune_tools.js';
+import { InternalClient } from './InternalClient.js';
+import { PriceOracleAgent } from './agents/PriceOracleAgent.js';
+import { FlashLoanAgent } from './agents/FlashLoanAgent.js';
+import { FlashArbAgent } from './agents/FlashArbAgent.js';
+import { DriftAgent } from './agents/DriftAgent.js';
+import { JupiterAgent } from './agents/JupiterAgent.js';
+import { FlashTradeAgent } from './agents/FlashTradeAgent.js';
+import { MarketAnalyst } from './agents/MarketAnalyst.js';
+import { MasterAgent } from './agents/MasterAgent.js';
+import { tools as flipsideTools, handlers as flipsideHandlers, initializeFlipside } from './flipside_tools.js';
+import { projectTools, handleProjectTool } from './project_tools.js';
+import {
+  initDatabase,
+  registerAI,
+  getAI,
+  getAllAIs,
+  saveMessage,
+  getMessages,
+  saveTask,
+  getTask,
+  getAllTasks,
+  saveContext,
+  getContext
+} from './database.js';
 
 class AILinkServer {
   constructor() {
@@ -84,7 +109,7 @@ class AILinkServer {
             required: ['aiId'],
           },
         },
-        // ... include other core tools here if needed, keeping it lean for now ... 
+        // Core tools
         {
           name: 'submit_task',
           description: 'Submit a new task to the global queue',
@@ -142,10 +167,43 @@ class AILinkServer {
             }
           }
         },
+        // Context Tools
+        {
+          name: 'share_context',
+          description: 'Share a context object with other AIs',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              contextId: { type: 'string' },
+              data: { type: 'object' },
+              authorizedAiIds: { type: 'array', items: { type: 'string' } },
+              expiresIn: { type: 'number', description: 'Expiration in seconds' }
+            },
+            required: ['contextId', 'data']
+          }
+        },
+        {
+          name: 'get_shared_context',
+          description: 'Retrieve a shared context object',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              contextId: { type: 'string' },
+              aiId: { type: 'string', description: 'ID of the AI requesting the context' }
+            },
+            required: ['contextId', 'aiId']
+          }
+        },
         // Add Solana Tools
         ...solanaTools,
         // Add Drift Tools
-        ...driftTools
+        ...driftTools,
+        // Add Dune Tools
+        ...duneTools,
+        // Add Flipside Tools
+        ...flipsideTools,
+        // Add Project Tools
+        ...projectTools
       ],
     }));
 
@@ -161,6 +219,17 @@ class AILinkServer {
         if (name.startsWith('drift_')) {
           return await handleDriftTool(name, args);
         }
+        if (name.startsWith('dune_')) {
+          return await handleDuneTool(name, args);
+        }
+        if (name.startsWith('flipside_')) {
+          return await flipsideHandlers[name](args);
+        }
+
+        // Check Project Tools
+        if (projectTools.some(t => t.name === name)) {
+          return await handleProjectTool(name, args);
+        }
 
         switch (name) {
           case 'register_ai': return this.handleRegisterAI(args);
@@ -171,6 +240,8 @@ class AILinkServer {
           case 'claim_task': return this.handleClaimTask(args);
           case 'complete_task': return this.handleCompleteTask(args);
           case 'list_connected_ais': return this.handleListConnectedAIs(args);
+          case 'share_context': return this.handleShareContext(args);
+          case 'get_shared_context': return this.handleGetSharedContext(args);
           default:
             throw new Error(`Unknown tool: ${name}`);
         }
@@ -190,11 +261,7 @@ class AILinkServer {
 
   async handleRegisterAI(args) {
     const { aiId, name, capabilities = [], metadata = {} } = args;
-    await withLock(async () => {
-      const data = await loadData();
-      data.aiRegistry[aiId] = { aiId, name, capabilities, metadata, registeredAt: new Date().toISOString() };
-      await saveData(data);
-    });
+    await registerAI({ aiId, name, capabilities, metadata, registeredAt: new Date().toISOString() });
     return {
       content: [{ type: 'text', text: `AI "${name}" (${aiId}) registered successfully.` }]
     };
@@ -204,20 +271,13 @@ class AILinkServer {
     const { fromAiId, toAiId, message, messageType, metadata = {} } = args;
 
     // Check Recipient
-    const recipientExists = await withLock(async () => {
-      const data = await loadData();
-      return !!data.aiRegistry[toAiId];
-    });
+    const recipient = await getAI(toAiId);
 
-    if (!recipientExists) return { content: [{ type: 'text', text: `Recipient AI "${toAiId}" not found` }], isError: true };
+    if (!recipient) return { content: [{ type: 'text', text: `Recipient AI "${toAiId}" not found` }], isError: true };
 
-    await withLock(async () => {
-      const data = await loadData();
-      data.messages.push({
-        fromAiId, toAiId, message, messageType, metadata,
-        timestamp: new Date().toISOString(), read: false
-      });
-      await saveData(data);
+    await saveMessage({
+      fromAiId, toAiId, message, messageType, metadata,
+      timestamp: new Date().toISOString(), read: false
     });
 
     return { content: [{ type: 'text', text: `Message sent from ${fromAiId} to ${toAiId}` }] };
@@ -226,45 +286,33 @@ class AILinkServer {
   async handleReadMessages(args) {
     const { aiId, unreadOnly = false, markAsRead = false } = args;
 
-    return await withLock(async () => {
-      const data = await loadData();
-      let msgs = data.messages.filter(m => m.toAiId === aiId);
+    let msgs = await getMessages(aiId, unreadOnly);
 
-      if (unreadOnly) {
-        msgs = msgs.filter(m => !m.read);
-      }
+    if (markAsRead && msgs.length > 0) {
+      const { markMessagesRead } = await import('./database.js');
+      await markMessagesRead(aiId);
+      msgs.forEach(m => m.read = true);
+    }
 
-      const responseMsgs = JSON.parse(JSON.stringify(msgs)); // Deep copy for response
-
-      if (markAsRead && msgs.length > 0) {
-        msgs.forEach(m => m.read = true);
-        await saveData(data);
-      }
-
-      return {
-        content: [{
-          type: 'text',
-          text: JSON.stringify({
-            aiId, messageCount: msgs.length,
-            messages: responseMsgs
-          }, null, 2)
-        }]
-      };
-    });
+    return {
+      content: [{
+        type: 'text',
+        text: JSON.stringify({
+          aiId, messageCount: msgs.length,
+          messages: msgs
+        }, null, 2)
+      }]
+    };
   }
 
   async handleSubmitTask(args) {
     const { description, requiredCapabilities = [] } = args;
     const taskId = `task-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 
-    await withLock(async () => {
-      const data = await loadData();
-      if (!data.taskQueue) data.taskQueue = [];
-      data.taskQueue.push({
-        taskId, description, requiredCapabilities, status: 'pending',
-        createdAt: new Date().toISOString()
-      });
-      await saveData(data);
+    await saveTask({
+      taskId, description, requiredCapabilities, status: 'pending',
+      createdAt: new Date().toISOString(),
+      assignedTo: null, result: null, startedAt: null, completedAt: null
     });
 
     return { content: [{ type: 'text', text: JSON.stringify({ taskId, status: 'pending' }) }] };
@@ -272,82 +320,246 @@ class AILinkServer {
 
   async handleListTasks(args) {
     const { status, capability } = args;
-    const tasks = await withLock(async () => {
-      const data = await loadData();
-      let t = data.taskQueue || [];
-      if (status) t = t.filter(x => x.status === status);
-      if (capability) t = t.filter(x => x.requiredCapabilities.includes(capability));
-      return t;
-    });
+    let tasks = await getAllTasks();
+
+    if (status) tasks = tasks.filter(x => x.status === status);
+    if (capability) tasks = tasks.filter(x => x.requiredCapabilities.includes(capability));
 
     return { content: [{ type: 'text', text: JSON.stringify({ count: tasks.length, tasks }, null, 2) }] };
   }
 
   async handleClaimTask(args) {
     const { taskId, aiId } = args;
-    return await withLock(async () => {
-      const data = await loadData();
-      const task = (data.taskQueue || []).find(t => t.taskId === taskId);
 
-      if (!task) throw new Error("Task not found");
-      if (task.status !== 'pending') throw new Error(`Task is ${task.status}, cannot claim`);
+    const task = await getTask(taskId);
 
-      task.status = 'in-progress';
-      task.assignedTo = aiId;
-      task.startedAt = new Date().toISOString();
-      await saveData(data);
-      return { content: [{ type: 'text', text: `Task ${taskId} claimed by ${aiId}` }] };
-    });
+    if (!task) throw new Error("Task not found");
+    if (task.status !== 'pending') throw new Error(`Task is ${task.status}, cannot claim`);
+
+    task.status = 'in-progress';
+    task.assignedTo = aiId;
+    task.startedAt = new Date().toISOString();
+
+    await saveTask(task);
+
+    return { content: [{ type: 'text', text: `Task ${taskId} claimed by ${aiId}` }] };
   }
 
   async handleCompleteTask(args) {
     const { taskId, result } = args;
-    return await withLock(async () => {
-      const data = await loadData();
-      const task = (data.taskQueue || []).find(t => t.taskId === taskId);
 
-      if (!task) throw new Error("Task not found");
+    const task = await getTask(taskId);
 
-      task.status = 'completed';
-      task.result = result;
-      task.completedAt = new Date().toISOString();
-      await saveData(data);
-      return { content: [{ type: 'text', text: `Task ${taskId} completed` }] };
-    });
+    if (!task) throw new Error("Task not found");
+
+    task.status = 'completed';
+    task.result = result;
+    task.completedAt = new Date().toISOString();
+
+    await saveTask(task);
+
+    return { content: [{ type: 'text', text: `Task ${taskId} completed` }] };
   }
 
   async handleListConnectedAIs(args) {
     const { filterByCapability } = args || {};
-    const ais = await withLock(async () => {
-      const data = await loadData();
-      return Object.values(data.aiRegistry || {});
-    });
+    let ais = await getAllAIs();
 
-    let filtered = ais;
     if (filterByCapability) {
-      filtered = ais.filter(ai => ai.capabilities.includes(filterByCapability));
+      ais = ais.filter(ai => ai.capabilities.includes(filterByCapability));
     }
     return {
       content: [{
         type: 'text',
-        text: JSON.stringify({ totalAIs: filtered.length, ais: filtered }, null, 2)
+        text: JSON.stringify({ totalAIs: ais.length, ais: ais }, null, 2)
       }]
     };
   }
 
+  async handleShareContext(args) {
+    const { contextId, data, authorizedAiIds = [], expiresIn } = args;
+
+    let expiresAt = null;
+    if (expiresIn) {
+      const expDate = new Date();
+      expDate.setSeconds(expDate.getSeconds() + expiresIn);
+      expiresAt = expDate.toISOString();
+    }
+
+    await saveContext({
+      contextId, data, authorizedAiIds,
+      createdAt: new Date().toISOString(),
+      expiresAt
+    });
+
+    return { content: [{ type: 'text', text: `Context ${contextId} shared` }] };
+  }
+
+  async handleGetSharedContext(args) {
+    const { contextId, aiId } = args;
+    const context = await getContext(contextId);
+
+    if (!context) throw new Error("Context not found");
+
+    // Check Authorization
+    if (context.authorizedAiIds && context.authorizedAiIds.length > 0) {
+      if (!context.authorizedAiIds.includes(aiId)) {
+        throw new Error("Unauthorized to access this context");
+      }
+    }
+
+    // Check expiration
+    if (context.expiresAt) {
+      if (new Date() > new Date(context.expiresAt)) {
+        throw new Error("Context expired");
+      }
+    }
+
+    return { content: [{ type: 'text', text: JSON.stringify(context.data, null, 2) }] };
+  }
+
   setupResourceHandlers() {
-    // Basic resource handler for now
     this.server.setRequestHandler(ListResourcesRequestSchema, async () => ({
-      resources: []
+      resources: [],
     }));
   }
 
   async run() {
-    // await db.initDatabase(); // Legacy SQLite
+    await initDatabase(); // Initialize SQLite with WAL
+
+    // Start the Agave-style Scheduler
+    const { Scheduler } = await import('./scheduler.js');
+    this.scheduler = new Scheduler();
+    this.scheduler.start();
+
     await startApiServer();  // Start Express API
     const transport = new StdioServerTransport();
     await this.server.connect(transport);
     console.error('AI Link MCP server running on stdio');
+
+    // --- INTERNAL AGENT BOOTSTRAP ---
+    try {
+      const internalClient = new InternalClient(this);
+
+      // 1. Price Oracle (The Eyes) - Agent ID: oracle-1
+      const oracle = new PriceOracleAgent({
+        aiId: 'oracle-1',
+        name: 'Oracle Eye',
+        rpcUrl: process.env.RPC_URL || 'https://api.devnet.solana.com',
+        heliusApiKey: process.env.HELIUS_API_KEY
+      });
+      await oracle.initialize(internalClient);
+
+      // 1.5 Flash Loan Agent (The Financier) - Agent ID: flash-1
+      const flash = new FlashLoanAgent({
+        aiId: 'flash-1',
+        name: 'Flash Financier',
+        // env: 'dev' 
+      });
+      await flash.initialize(internalClient);
+
+      // 1.8 Flash Arb Strategist (The Strategist) - Agent ID: arb-1
+      const arb = new FlashArbAgent({
+        aiId: 'arb-1',
+        name: 'Arb Strategist'
+      });
+      await arb.initialize(internalClient);
+      arb.financier = flash; // Give Strategist access to the Bank
+
+      // Initialize Flipside (Global Tool)
+      if (process.env.FLIPSIDE_API_KEY) {
+        initializeFlipside(process.env.FLIPSIDE_API_KEY);
+      }
+
+      // 2. Drift Agent (The Muscle) - Agent ID: drift-1
+      const drift = new DriftAgent({
+        aiId: 'drift-1',
+        name: 'Drift Bot',
+        rpcUrl: process.env.RPC_URL || 'https://api.devnet.solana.com',
+        env: process.env.DRIFT_ENV || 'devnet' // Default to devnet for safety
+      });
+      await drift.initialize(internalClient);
+
+      // 3. Jupiter Agent (The Aggillator) - Agent ID: jup-1
+      const jup = new JupiterAgent({
+        aiId: 'jup-1',
+        name: 'Jupiter Aggillator',
+        rpcUrl: process.env.RPC_URL || 'https://api.mainnet-beta.solana.com'
+      });
+      await jup.initialize(internalClient);
+
+      // 4. Market Analyst (The Quant) - Agent ID: quant-1
+      const quant = new MarketAnalyst({
+        aiId: 'quant-1',
+        name: 'Market Quant'
+      });
+      await quant.initialize(internalClient);
+
+      // 5. Master Agent (The Brain) - Agent ID: master-1
+      const master = new MasterAgent({
+        aiId: 'master-1',
+        name: 'Master Brain',
+        geminiApiKey: process.env.GEMINI_API_KEY
+      });
+      await master.initialize(internalClient);
+
+      console.error('[System] Internal Agents (Oracle, Drift, Master) initialized.');
+
+      // 4. Flash Trade Agent (Mainnet Guard)
+      // Needs Mainnet RPC. If process.env.RPC_URL is devnet, we might need a separate one.
+      // Assuming RPC_URL is generic or user provides it. 
+      // For safety, let's look for a MAINNET specific var or fallback to public.
+      const MAINNET_RPC = process.env.MAINNET_RPC_URL || 'https://api.mainnet-beta.solana.com';
+
+      // Load persisted wallet if available
+      let mainnetWallet = null;
+      try {
+        if (fs.existsSync('solana_wallet.json')) {
+          const secret = Uint8Array.from(JSON.parse(fs.readFileSync('solana_wallet.json', 'utf-8')));
+          mainnetWallet = Keypair.fromSecretKey(secret);
+          console.log(`[Main] Loaded Wallet for Flash.Trade: ${mainnetWallet.publicKey.toBase58()}`);
+        }
+      } catch (e) { console.warn("Failed to load mainnet wallet:", e); }
+
+      const flashAgent = new FlashTradeAgent({
+        aiId: 'flash-guardian',
+        name: 'FlashGuardian',
+        rpcUrl: MAINNET_RPC,
+        wallet: mainnetWallet // Can be null, agent handles it
+      });
+
+      // Assign tools
+      // flashAgent.registerTools(solanaTools); // If it needed generic tools
+
+      // Init
+      await flashAgent.initialize(internalClient, oracle);
+
+      // --- REGISTRATION (Using internal registry in MasterAgent) ---
+      // master.registerAgent is not a function. MasterAgent has a hardcoded registry.
+      // We must update MasterAgent.js to know about these new agents.
+      // But we MUST keep the heartbeat loop below.
+
+      // --- AGENT HEARTBEAT LOOP ---
+      // Poll for messages every 2 seconds so they can react to Chat UI
+      setInterval(async () => {
+        try {
+          // Parallel checks
+          await Promise.all([
+            master.checkMessages().catch(e => console.error(`[Loop] Master check failed: ${e.message}`)),
+            drift.checkMessages().catch(e => console.error(`[Loop] Drift check failed: ${e.message}`)),
+            oracle.checkMessages().catch(e => console.error(`[Loop] Oracle check failed: ${e.message}`)),
+            flashAgent.checkMessages().catch(e => console.error(`[Loop] FlashGuardian check failed: ${e.message}`)),
+            flash.checkMessages().catch(e => console.error(`[Loop] Financier check failed: ${e.message}`)),
+            arb.checkMessages().catch(e => console.error(`[Loop] Strategist check failed: ${e.message}`))
+          ]);
+        } catch (err) {
+          console.error('[System] Heartbeat Error:', err);
+        }
+      }, 2000);
+
+    } catch (e) {
+      console.error('[System] Failed to initialize internal agents:', e);
+    }
   }
 }
 
