@@ -72,11 +72,19 @@ class AgentHub extends EventEmitter {
 // --- Mock Agents (Phase 1) ---
 
 class MockAgent implements Agent {
+    public name: string;
+    public role: string;
+    public capabilities: AgentCapability[];
+
     constructor(
-        public name: string,
-        public role: string,
-        public capabilities: AgentCapability[]
-    ) { }
+        name: string,
+        role: string,
+        capabilities: AgentCapability[]
+    ) {
+        this.name = name;
+        this.role = role;
+        this.capabilities = capabilities;
+    }
 
     async process(task: string): Promise<AgentResponse> {
         // Simulate "thinking" delay
