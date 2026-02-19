@@ -7,6 +7,18 @@ import { Agent } from "./agents/AgentFramework.js";
 
 const SERVER_SCRIPT_PATH = "index.js"; // Path to the AI Link MCP Server entry point
 
+// Model Routing Strategy:
+// - Engineering/code tasks → glm-5 (via OpenCode)
+// - Vision/tools/trading → gemini-3-flash (via Google Antigravity)
+// - Long context research → kimi-k2.5 (via OpenCode)
+
+const MODEL_ROUTING = {
+    engineering: ['rust', 'performance', 'code', 'refactor', 'debug', 'implement', 'fix'],
+    trading: ['trade', 'position', 'long', 'short', 'analyze', 'price', 'market', 'signal'],
+    research: ['research', 'explain', 'summarize', 'document', 'compare', 'analyze architecture'],
+    security: ['audit', 'security', 'hack', 'vulnerability', 'exploit']
+};
+
 // --- The Core Hub ---
 
 class AgentHub {
@@ -90,18 +102,28 @@ class AgentHub {
         console.log(`\n📨 Received Task: "${task}"`);
         console.log("----------------------------------------");
 
-        // Simple keyword routing for now
         const taskLower = task.toLowerCase();
         let targetAgent: Agent | undefined;
+        let routedVia: string = '';
 
-        if (taskLower.includes('rust') || taskLower.includes('performance')) {
-            targetAgent = this.agents.get('Agent-Rust');
-        } else if (taskLower.includes('typescript') || taskLower.includes('node') || taskLower.includes('js')) {
-            targetAgent = this.agents.get('Agent-TS');
-        } else if (taskLower.includes('audit') || taskLower.includes('security') || taskLower.includes('hack')) {
+        // Task-based routing using MODEL_ROUTING config
+        if (MODEL_ROUTING.engineering.some(k => taskLower.includes(k))) {
+            if (taskLower.includes('rust')) {
+                targetAgent = this.agents.get('Agent-Rust');
+                routedVia = 'engineering/rust';
+            } else {
+                targetAgent = this.agents.get('Agent-TS');
+                routedVia = 'engineering/typescript';
+            }
+        } else if (MODEL_ROUTING.security.some(k => taskLower.includes(k))) {
             targetAgent = this.agents.get('Agent-Sec');
+            routedVia = 'security';
+        } else if (MODEL_ROUTING.trading.some(k => taskLower.includes(k))) {
+            targetAgent = this.agents.get('Gemini-Visionary');
+            routedVia = 'trading (gemini-3-flash)';
         } else {
             targetAgent = this.agents.get('Gemini-Visionary');
+            routedVia = 'general (gemini-3-flash)';
         }
 
         if (!targetAgent) {
@@ -109,19 +131,8 @@ class AgentHub {
             return;
         }
 
-        console.log(`🔍 Routing to: ${targetAgent.name}`);
-
-        // We use the agent's internal helper to send the message
-        // But wait, the agent sends a message TO another AI ID.
-        // In this architecture, the Hub is the "User" interface triggering the agents.
-        // We can simulate a direct request by just calling processRequest directly?
-        // NO, the "Agent" class is designed to handle messages from the SERVER.
-        // BUT, since we are instantiating the agent object HERE, we can just call its LLM function directly
-        // for this "CLI" use case, OR we can send a message to it via the server and listen for response.
-
-        // Direct call is faster for this CLI tool, but sending via server verifies the MCP plumbing.
-        // Let's do the Direct Call for the "Router" functionality, effectively treating the Hub as the orchestrator
-        // that owns these agent instances.
+        console.log(`🔍 Routing via: ${routedVia}`);
+        console.log(`🎯 Target: ${targetAgent.name}`);
 
         try {
             const result = await targetAgent.processRequest(task);

@@ -21,8 +21,9 @@ export class FlashTradeAgent extends Agent {
     constructor(config) {
         super({ ...config, name: 'FlashGuardian' });
         this.connection = new Connection(config.rpcUrl);
-        this.wallet = config.wallet; // Keypair
-        this.client = null;
+        this.wallet = config.wallet;
+        this.oracle = config.oracle || null;
+        this.flashClient = null;
         this.isActive = false;
 
         // Load State (Migrates legacy automatically)
@@ -74,7 +75,7 @@ export class FlashTradeAgent extends Agent {
 
         try {
             console.log(`[${this.name}] Connecting to Flash.Trade (Mainnet)...`);
-            // this.client = await FlashClient.connect(this.connection, this.wallet);
+            // this.flashClient = await FlashClient.connect(this.connection, this.wallet);
             console.log(`[${this.name}] Connected! (Mocked Client)`);
 
             // Auto-Start if any strategy is active
@@ -212,7 +213,7 @@ export class FlashTradeAgent extends Agent {
         console.warn(`[${this.name}] 🚨 CLOSING ${strat.id} at ${price.toFixed(4)} (${reason})`);
 
         // EXECUTE CLOSE (Mocked)
-        // await this.client.closePosition(...)
+        // await this.flashClient.closePosition(...)
 
         await this.sendMessage("master", `🚨 **EXECUTED: ${strat.id} CLOSED** 🚨\nPrice: ${price.toFixed(4)}\nReason: ${reason}`);
 
@@ -228,7 +229,7 @@ export class FlashTradeAgent extends Agent {
         console.log(`[${this.name}] Opening ${type.toUpperCase()} ${symbol} x${leverage} size:${amount}...`);
 
         // EXECUTE OPEN (Mocked)
-        // await this.client.openPosition(...)
+        // await this.flashClient.openPosition(...)
 
         // Mock Entry Price
         const entryPrice = this.oracle ? await this.oracle.getPrice(symbol) : 150;

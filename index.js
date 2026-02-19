@@ -25,6 +25,13 @@ import { MarketAnalyst } from './agents/MarketAnalyst.js';
 import { MasterAgent } from './agents/MasterAgent.js';
 import { tools as flipsideTools, handlers as flipsideHandlers, initializeFlipside } from './flipside_tools.js';
 import { projectTools, handleProjectTool } from './project_tools.js';
+import { getDisciplineTools, handleDisciplineTool } from './trading_discipline.js';
+import { getAugmentedTraderTools, handleAugmentedTraderTool } from './augmented_trader.js';
+import { getMarketIntelligenceTools, handleMarketIntelligenceTool } from './market_intelligence.js';
+import { getTechnicalIndicatorTools, handleTechnicalIndicatorTool } from './technical_indicators.js';
+import { getFlashExecutorTools, handleFlashExecutorTool, initializeFlashExecutor } from './flash_executor.js';
+import { getDriftExecutorTools, handleDriftExecutorTool } from './drift_executor.js';
+import { getArbTools, handleArbTool } from './arbitrage_scanner.js';
 import {
   initDatabase,
   registerAI,
@@ -203,7 +210,21 @@ class AILinkServer {
         // Add Flipside Tools
         ...flipsideTools,
         // Add Project Tools
-        ...projectTools
+        ...projectTools,
+        // Add Trading Discipline Tools
+        ...getDisciplineTools(),
+        // Add Augmented Trader Tools
+        ...getAugmentedTraderTools(),
+        // Add Market Intelligence Tools (CoinGlass)
+        ...getMarketIntelligenceTools(),
+        // Add Technical Indicators
+        ...getTechnicalIndicatorTools(),
+        // Add Flash.trade Executor
+        ...getFlashExecutorTools(),
+        // Add Drift Executor
+        ...getDriftExecutorTools(),
+        // Add Arbitrage Scanner
+        ...getArbTools()
       ],
     }));
 
@@ -216,14 +237,82 @@ class AILinkServer {
         if (name.startsWith('solana_')) {
           return await handleSolanaTool(name, args);
         }
+        
+        // Drift Executor (New)
+        if (name.startsWith('drift_') && ['drift_get_price', 'drift_get_position', 'drift_open_position', 'drift_close_position'].includes(name)) {
+          const result = await handleDriftExecutorTool(name, args);
+          return {
+            content: [{ type: 'text', text: JSON.stringify(result, null, 2) }]
+          };
+        }
+
+        // Drift Tools (Legacy)
         if (name.startsWith('drift_')) {
           return await handleDriftTool(name, args);
         }
+
         if (name.startsWith('dune_')) {
           return await handleDuneTool(name, args);
         }
         if (name.startsWith('flipside_')) {
           return await flipsideHandlers[name](args);
+        }
+        
+        // Augmented Trader Tools (must check before generic trading_ prefix)
+        const augmentedTools = ['trading_analyze', 'trading_prepare', 'trading_execute', 'trading_cancel', 'trading_positions', 'trading_close', 'trading_pending'];
+        if (augmentedTools.includes(name)) {
+          const result = await handleAugmentedTraderTool(name, args);
+          return {
+            content: [{ type: 'text', text: typeof result === 'string' ? result : JSON.stringify(result, null, 2) }]
+          };
+        }
+        
+        // Trading Discipline Tools
+        if (name.startsWith('trading_')) {
+          const result = await handleDisciplineTool(name, args);
+          return {
+            content: [{ type: 'text', text: JSON.stringify(result, null, 2) }]
+          };
+        }
+
+        // Market Intelligence Tools (CoinGlass)
+        if (name.startsWith('market_')) {
+          const result = await handleMarketIntelligenceTool(name, args);
+          return {
+            content: [{ type: 'text', text: JSON.stringify(result, null, 2) }]
+          };
+        }
+
+        // Technical Indicators
+        if (name.startsWith('tech_')) {
+          const result = await handleTechnicalIndicatorTool(name, args);
+          return {
+            content: [{ type: 'text', text: JSON.stringify(result, null, 2) }]
+          };
+        }
+
+        // Flash.trade Executor
+        if (name.startsWith('flash_')) {
+          const result = await handleFlashExecutorTool(name, args);
+          return {
+            content: [{ type: 'text', text: JSON.stringify(result, null, 2) }]
+          };
+        }
+
+        // Drift Executor
+        if (name.startsWith('drift_')) {
+          const result = await handleDriftExecutorTool(name, args);
+          return {
+            content: [{ type: 'text', text: JSON.stringify(result, null, 2) }]
+          };
+        }
+
+        // Arbitrage Scanner
+        if (name === 'scan_arbitrage') {
+          const result = await handleArbTool(name, args);
+          return {
+            content: [{ type: 'text', text: JSON.stringify(result, null, 2) }]
+          };
         }
 
         // Check Project Tools
@@ -437,129 +526,120 @@ class AILinkServer {
     await this.server.connect(transport);
     console.error('AI Link MCP server running on stdio');
 
-    // --- INTERNAL AGENT BOOTSTRAP ---
-    try {
-      const internalClient = new InternalClient(this);
+    // Initialize Flash.trade Executor
+    const flashInit = await initializeFlashExecutor();
+    if (flashInit.initialized) {
+      console.error(`[Flash] Executor initialized: ${flashInit.mode} mode`);
+    }
 
-      // 1. Price Oracle (The Eyes) - Agent ID: oracle-1
-      const oracle = new PriceOracleAgent({
+    // --- INTERNAL AGENT BOOTSTRAP ---
+    const internalClient = new InternalClient(this);
+
+    // Helper: Initialize agent with graceful failure
+    const safeInit = async (agent, name) => {
+      try {
+        await agent.initialize(internalClient);
+        return agent;
+      } catch (e) {
+        console.error(`[System] Failed to initialize ${name}: ${e.message}`);
+        return null;
+      }
+    };
+
+    // Initialize agents in parallel with graceful failure handling
+    const [oracle, flash, arb, drift, jup, quant, master, flashAgent] = await Promise.all([
+      safeInit(new PriceOracleAgent({
         aiId: 'oracle-1',
         name: 'Oracle Eye',
         rpcUrl: process.env.RPC_URL || 'https://api.devnet.solana.com',
         heliusApiKey: process.env.HELIUS_API_KEY
-      });
-      await oracle.initialize(internalClient);
-
-      // 1.5 Flash Loan Agent (The Financier) - Agent ID: flash-1
-      const flash = new FlashLoanAgent({
+      }), 'PriceOracleAgent'),
+      
+      safeInit(new FlashLoanAgent({
         aiId: 'flash-1',
         name: 'Flash Financier',
-        // env: 'dev' 
-      });
-      await flash.initialize(internalClient);
-
-      // 1.8 Flash Arb Strategist (The Strategist) - Agent ID: arb-1
-      const arb = new FlashArbAgent({
+      }), 'FlashLoanAgent'),
+      
+      safeInit(new FlashArbAgent({
         aiId: 'arb-1',
         name: 'Arb Strategist'
-      });
-      await arb.initialize(internalClient);
-      arb.financier = flash; // Give Strategist access to the Bank
-
-      // Initialize Flipside (Global Tool)
-      if (process.env.FLIPSIDE_API_KEY) {
-        initializeFlipside(process.env.FLIPSIDE_API_KEY);
-      }
-
-      // 2. Drift Agent (The Muscle) - Agent ID: drift-1
-      const drift = new DriftAgent({
+      }), 'FlashArbAgent'),
+      
+      safeInit(new DriftAgent({
         aiId: 'drift-1',
         name: 'Drift Bot',
         rpcUrl: process.env.RPC_URL || 'https://api.devnet.solana.com',
-        env: process.env.DRIFT_ENV || 'devnet' // Default to devnet for safety
-      });
-      await drift.initialize(internalClient);
-
-      // 3. Jupiter Agent (The Aggillator) - Agent ID: jup-1
-      const jup = new JupiterAgent({
+        env: process.env.DRIFT_ENV || 'devnet'
+      }), 'DriftAgent'),
+      
+      safeInit(new JupiterAgent({
         aiId: 'jup-1',
         name: 'Jupiter Aggillator',
         rpcUrl: process.env.RPC_URL || 'https://api.mainnet-beta.solana.com'
-      });
-      await jup.initialize(internalClient);
-
-      // 4. Market Analyst (The Quant) - Agent ID: quant-1
-      const quant = new MarketAnalyst({
+      }), 'JupiterAgent'),
+      
+      safeInit(new MarketAnalyst({
         aiId: 'quant-1',
         name: 'Market Quant'
-      });
-      await quant.initialize(internalClient);
-
-      // 5. Master Agent (The Brain) - Agent ID: master-1
-      const master = new MasterAgent({
+      }), 'MarketAnalyst'),
+      
+      safeInit(new MasterAgent({
         aiId: 'master-1',
         name: 'Master Brain',
         geminiApiKey: process.env.GEMINI_API_KEY
-      });
-      await master.initialize(internalClient);
+      }), 'MasterAgent'),
 
-      console.error('[System] Internal Agents (Oracle, Drift, Master) initialized.');
-
-      // 4. Flash Trade Agent (Mainnet Guard)
-      // Needs Mainnet RPC. If process.env.RPC_URL is devnet, we might need a separate one.
-      // Assuming RPC_URL is generic or user provides it. 
-      // For safety, let's look for a MAINNET specific var or fallback to public.
-      const MAINNET_RPC = process.env.MAINNET_RPC_URL || 'https://api.mainnet-beta.solana.com';
-
-      // Load persisted wallet if available
-      let mainnetWallet = null;
-      try {
-        if (fs.existsSync('solana_wallet.json')) {
-          const secret = Uint8Array.from(JSON.parse(fs.readFileSync('solana_wallet.json', 'utf-8')));
-          mainnetWallet = Keypair.fromSecretKey(secret);
-          console.log(`[Main] Loaded Wallet for Flash.Trade: ${mainnetWallet.publicKey.toBase58()}`);
-        }
-      } catch (e) { console.warn("Failed to load mainnet wallet:", e); }
-
-      const flashAgent = new FlashTradeAgent({
-        aiId: 'flash-guardian',
-        name: 'FlashGuardian',
-        rpcUrl: MAINNET_RPC,
-        wallet: mainnetWallet // Can be null, agent handles it
-      });
-
-      // Assign tools
-      // flashAgent.registerTools(solanaTools); // If it needed generic tools
-
-      // Init
-      await flashAgent.initialize(internalClient, oracle);
-
-      // --- REGISTRATION (Using internal registry in MasterAgent) ---
-      // master.registerAgent is not a function. MasterAgent has a hardcoded registry.
-      // We must update MasterAgent.js to know about these new agents.
-      // But we MUST keep the heartbeat loop below.
-
-      // --- AGENT HEARTBEAT LOOP ---
-      // Poll for messages every 2 seconds so they can react to Chat UI
-      setInterval(async () => {
+      (async () => {
+        const MAINNET_RPC = process.env.MAINNET_RPC_URL || 'https://api.mainnet-beta.solana.com';
+        let mainnetWallet = null;
         try {
-          // Parallel checks
-          await Promise.all([
-            master.checkMessages().catch(e => console.error(`[Loop] Master check failed: ${e.message}`)),
-            drift.checkMessages().catch(e => console.error(`[Loop] Drift check failed: ${e.message}`)),
-            oracle.checkMessages().catch(e => console.error(`[Loop] Oracle check failed: ${e.message}`)),
-            flashAgent.checkMessages().catch(e => console.error(`[Loop] FlashGuardian check failed: ${e.message}`)),
-            flash.checkMessages().catch(e => console.error(`[Loop] Financier check failed: ${e.message}`)),
-            arb.checkMessages().catch(e => console.error(`[Loop] Strategist check failed: ${e.message}`))
-          ]);
-        } catch (err) {
-          console.error('[System] Heartbeat Error:', err);
-        }
-      }, 2000);
+          const walletPath = process.env.SOLANA_WALLET_PATH;
+          if (walletPath && fs.existsSync(walletPath)) {
+            const secret = Uint8Array.from(JSON.parse(fs.readFileSync(walletPath, 'utf-8')));
+            mainnetWallet = Keypair.fromSecretKey(secret);
+            console.log(`[Main] Loaded Wallet for Flash.Trade: ${mainnetWallet.publicKey.toBase58()}`);
+          }
+        } catch (e) { console.warn("Failed to load mainnet wallet:", e); }
+        
+        const agent = new FlashTradeAgent({
+          aiId: 'flash-guardian',
+          name: 'FlashGuardian',
+          rpcUrl: MAINNET_RPC,
+          wallet: mainnetWallet
+        });
+        return safeInit(agent, 'FlashTradeAgent');
+      })()
+    ]);
 
-    } catch (e) {
-      console.error('[System] Failed to initialize internal agents:', e);
+    // Initialize Flipside (Global Tool)
+    if (process.env.FLIPSIDE_API_KEY) {
+      initializeFlipside(process.env.FLIPSIDE_API_KEY);
     }
+
+    // Wire up agent dependencies
+    if (arb && flash) {
+      arb.financier = flash;
+    }
+
+    // Log initialized agents
+    const activeAgents = [oracle, flash, arb, drift, jup, quant, master, flashAgent].filter(a => a !== null);
+    console.error(`[System] ${activeAgents.length}/8 agents initialized successfully.`);
+
+    // --- AGENT HEARTBEAT LOOP ---
+    setInterval(async () => {
+      try {
+        await Promise.all([
+          master?.checkMessages().catch(e => {}),
+          drift?.checkMessages().catch(e => {}),
+          oracle?.checkMessages().catch(e => {}),
+          flashAgent?.checkMessages().catch(e => {}),
+          flash?.checkMessages().catch(e => {}),
+          arb?.checkMessages().catch(e => {})
+        ]);
+      } catch (err) {
+        console.error('[System] Heartbeat Error:', err);
+      }
+    }, 2000);
   }
 }
 

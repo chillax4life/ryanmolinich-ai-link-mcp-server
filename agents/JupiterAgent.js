@@ -4,11 +4,16 @@ import fetchNode from 'node-fetch';
 const fetch = global.fetch || fetchNode;
 
 const JUP_API = 'https://api.jup.ag/swap/v1';
-const JUP_KEYS = [
-    'cf9eb936-5e2c-4754-adaa-c786db125a64',
-    'abce94de-6b8f-4fff-8e76-cffa916b2cdd',
-    '7a92406d-05d5-4717-b694-67d236872a70'
-];
+
+// Load Jupiter API keys from environment (multiple keys for load balancing)
+const getJupiterKeys = () => {
+    const keys = [];
+    if (process.env.JUPITER_API_KEY_1) keys.push(process.env.JUPITER_API_KEY_1);
+    if (process.env.JUPITER_API_KEY_2) keys.push(process.env.JUPITER_API_KEY_2);
+    if (process.env.JUPITER_API_KEY_3) keys.push(process.env.JUPITER_API_KEY_3);
+    // Fallback to public API (no key) if none configured
+    return keys.length > 0 ? keys : [null];
+};
 
 /**
  * JupiterAgent ("The Aggillator")
@@ -60,12 +65,13 @@ export class JupiterAgent extends SolanaAgent {
             const url = `${JUP_API}/quote?inputMint=${inputMint}&outputMint=${outputMint}&amount=${amount}&slippageBps=${slippageBps}`;
             console.log(`[${this.name}] Fetching quote: ${url}`);
 
-            // Simple random key selection to distribute load
-            const key = JUP_KEYS[Math.floor(Math.random() * JUP_KEYS.length)];
+            const keys = getJupiterKeys();
+            const key = keys[Math.floor(Math.random() * keys.length)];
 
-            const response = await this.fetch(url, {
-                headers: { 'x-api-key': key }
-            });
+            const headers = {};
+            if (key) headers['x-api-key'] = key;
+
+            const response = await this.fetch(url, { headers });
             const data = await response.json();
 
             if (data.error) throw new Error(data.error);
@@ -83,13 +89,15 @@ export class JupiterAgent extends SolanaAgent {
         if (!this.keypair) throw new Error("Wallet required to create swap transaction.");
 
         try {
-            const key = JUP_KEYS[Math.floor(Math.random() * JUP_KEYS.length)];
+            const keys = getJupiterKeys();
+            const key = keys[Math.floor(Math.random() * keys.length)];
+
+            const headers = { 'Content-Type': 'application/json' };
+            if (key) headers['x-api-key'] = key;
+
             const response = await this.fetch(`${JUP_API}/swap`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'x-api-key': key
-                },
+                headers,
                 body: JSON.stringify({
                     quoteResponse,
                     userPublicKey: this.keypair.publicKey.toBase58(),
@@ -98,7 +106,7 @@ export class JupiterAgent extends SolanaAgent {
             });
 
             const { swapTransaction } = await response.json();
-            return swapTransaction; // Base64 encoded transaction
+            return swapTransaction;
         } catch (error) {
             console.error(`[${this.name}] Swap creation error: ${error.message}`);
             throw error;

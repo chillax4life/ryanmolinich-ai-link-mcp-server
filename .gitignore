@@ -4,6 +4,22 @@ node_modules/
 .DS_Store
 *.log
 ai_link.db
+ai_link.db-shm
+ai_link.db-wal
+
+# Runtime data
+trade_log.json
+trading_discipline_state.json
+open_positions.json
+pending_trades.json
+*.json.backup
+
+# Screenshots
+*.png
+
+# Temporary
+tmp/
+temp/
 .vscode/
 .idea/
 

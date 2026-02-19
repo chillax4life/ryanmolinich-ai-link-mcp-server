@@ -14,8 +14,8 @@ try {
     console.warn("⚠️ Failed to load Drift SDK. Drift tools will be disabled. Error:", e.message);
 }
 
-// Use a public RPC by default, but this should ideally be configurable
-const CONNECTION_URL = 'https://api.devnet.solana.com';
+const DRIFT_ENV = process.env.DRIFT_ENV || 'mainnet-beta';
+const CONNECTION_URL = process.env.MAINNET_RPC_URL || process.env.SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com';
 const connection = new Connection(CONNECTION_URL);
 
 
@@ -43,7 +43,7 @@ async function getDriftClient() {
     const driftClient = new DriftClient({
         connection,
         wallet,
-        env: 'devnet',
+        env: DRIFT_ENV,
         accountSubscription: { type: 'polling', accountLoader: { type: 'cached', resamplingIntervalMs: 1000 } }
     });
 
@@ -94,7 +94,7 @@ async function getOrInitDriftClient() {
     const client = new DriftClient({
         connection,
         wallet,
-        env: 'devnet'
+        env: DRIFT_ENV
     });
 
     await client.subscribe();
@@ -113,31 +113,36 @@ export async function handleDriftTool(name, args) {
         switch (name) {
             case 'drift_get_market_summary': {
                 const symbol = args.symbol.toUpperCase();
-                // Find market index
-                const market = client.getPerpMarketAccounts().find(m =>
-                    // This is a simplification. Usually strictly mapped.
-                    // For now, let's assume standard mapping or basic index lookup if we had it.
-                    // The SDK has helpers for this.
-                    true
-                );
-
-                // Better approach: Use SDK helper to get by symbol
-                const perpMarket = client.getPerpMarketAccount(0); // SOL-PERP is usually 0
-                // TODO: Real symbol mapping
-
-                // For MVP, just return SOL-PERP data (Index 0)
-                if (symbol !== 'SOL-PERP') {
-                    return { content: [{ type: 'text', text: "Only SOL-PERP supported in MVP" }] };
+                
+                // Market index mapping (Drift standard indices)
+                const MARKET_INDICES = {
+                    'SOL-PERP': 0,
+                    'BTC-PERP': 1,
+                    'ETH-PERP': 2,
+                    'DOGE-PERP': 3,
+                    'SUI-PERP': 4,
+                    'WIF-PERP': 5,
+                    'BONK-PERP': 6,
+                };
+                
+                const marketIndex = MARKET_INDICES[symbol];
+                if (marketIndex === undefined) {
+                    return { 
+                        content: [{ 
+                            type: 'text', 
+                            text: `Unknown market: ${symbol}. Supported markets: ${Object.keys(MARKET_INDICES).join(', ')}` 
+                        }] 
+                    };
                 }
 
-                const price = client.getOracleDataForPerpMarket(0).price;
+                const price = client.getOracleDataForPerpMarket(marketIndex).price;
 
                 return {
                     content: [{
                         type: 'text', text: JSON.stringify({
-                            symbol: "SOL-PERP",
+                            symbol: symbol,
                             price: price.toString(),
-                            marketIndex: 0
+                            marketIndex: marketIndex
                         }, null, 2)
                     }]
                 };

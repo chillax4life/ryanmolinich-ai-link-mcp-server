@@ -1,3 +1,4 @@
 #!/bin/bash
-export GOOGLE_API_KEY="AIzaSyAoa0BL4PyR4A1px9uvitVgJXNaSgegWBc"
-node agents/run_demo.js "$@"
+# Load environment from .env file
+cd "$(dirname "$0")"
+node --env-file=.env agents/run_demo.js "$@"

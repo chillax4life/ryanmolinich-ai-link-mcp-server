@@ -46,6 +46,21 @@ export class FlashLoanAgent extends SolanaAgent {
                 this.connection
             );
 
+            // Initialize or fetch existing marginfi account for the wallet
+            try {
+                const accounts = await this.marginfiClient.getMarginfiAccountsForAuthority(this.keypair.publicKey);
+                if (accounts && accounts.length > 0) {
+                    this.marginfiAccount = accounts[0];
+                    console.log(`[${this.name}] Loaded existing MarginFi account: ${this.marginfiAccount.address}`);
+                } else {
+                    console.log(`[${this.name}] No existing MarginFi account found. Creating one requires a deposit transaction.`);
+                    this.marginfiAccount = null;
+                }
+            } catch (accErr) {
+                console.warn(`[${this.name}] Could not fetch MarginFi accounts: ${accErr.message}`);
+                this.marginfiAccount = null;
+            }
+
             console.log(`[${this.name}] MarginFi Initialized. Ready for 0% Fee Loans.`);
 
         } catch (e) {
@@ -71,8 +86,11 @@ export class FlashLoanAgent extends SolanaAgent {
      * @param {Array} arbitrageInstructions - The instructions to run with the borrowed funds
      */
     async createFlashLoanTx(tokenMint, amount, arbitrageInstructions) {
+        if (!this.marginfiClient) {
+            throw new Error("MarginFi Client not initialized (RPC/Wallet required)");
+        }
         if (!this.marginfiAccount) {
-            throw new Error("MarginFi Account not initialized (Wallet required)");
+            throw new Error("MarginFi Account not initialized. Create an account first by making a deposit to MarginFi.");
         }
 
         console.log(`[${this.name}] Building Flash Loan Tx: Borrow ${amount} of ${tokenMint}`);

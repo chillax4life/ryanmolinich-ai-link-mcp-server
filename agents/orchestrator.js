@@ -22,7 +22,7 @@ const colors = {
 
 const createTransport = () => new StdioClientTransport({
     command: 'node',
-    args: ['/Users/ryanmolinich/ai-link-mcp-server/index.js']
+    args: ['/Users/ryanmolinich/Projects/ai-link-mcp-server/index.js']
 });
 
 async function main() {

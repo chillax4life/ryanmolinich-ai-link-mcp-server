@@ -11,7 +11,10 @@ export class PerplexityAgent extends Agent {
             ...config,
             metadata: { ...config.metadata, backend: 'perplexity-api', model: 'sonar-pro' }
         });
-        this.apiKey = process.env.PERPLEXITY_API_KEY || "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"; // Hardcoded from config for demo
+        this.apiKey = process.env.PERPLEXITY_API_KEY;
+        if (!this.apiKey) {
+            console.warn(`[${this.name}] PERPLEXITY_API_KEY not set. Agent will return mock responses.`);
+        }
         this.endpoint = "https://api.perplexity.ai/chat/completions";
     }
 

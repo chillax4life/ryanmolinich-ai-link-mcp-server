@@ -9,32 +9,13 @@ const execPromise = util.promisify(exec);
 export class SolanaAgent extends Agent {
     constructor(config) {
         super(config);
-        this.projectRoot = '/Users/ryanmolinich/solana-mosh-pit';
-        this.driftBotDir = path.join(this.projectRoot, 'keep-rs');
-        this.flashBotDir = path.join(this.projectRoot, 'flashtrade-helius-bot');
-    }
-
-    async processRequest(prompt, metadata) {
-        const lowerPrompt = prompt.toLowerCase();
-
-        if (lowerPrompt.includes('status')) {
-            return await this.checkStatus();
-        } else if (lowerPrompt.includes('logs filler')) {
-            return await this.readLogs(this.driftBotDir, 'filler.log'); // Assuming log file or capturing stdout
-        } else if (lowerPrompt.includes('logs flash')) {
-            return await this.readLogs(this.flashBotDir, 'flash.log');
-        } else if (lowerPrompt.includes('balance')) {
-            return await this.checkBalance();
-        }
-
-        return "I can help you monitor the Solana bots. Ask for 'status', 'logs filler', or 'balance'.";
+        this.projectRoot = process.env.PROJECT_ROOT || process.cwd();
     }
 
     async checkStatus() {
         try {
-            // Check for running processes
-            const { stdout } = await execPromise('ps aux | grep -E "cargo|ts-node|node" | grep -v grep');
-            const lines = stdout.split('\n').filter(l => l.includes('solana-mosh-pit'));
+            const { stdout } = await execPromise('ps aux | grep -E "cargo|ts-node|node" | grep -v grep | head -10');
+            const lines = stdout.split('\n').filter(l => l.trim());
 
             if (lines.length === 0) return "No Solana bots currently running.";
 
@@ -45,17 +26,6 @@ export class SolanaAgent extends Agent {
         } catch (error) {
             return `Error checking status: ${error.message}`;
         }
-    }
-
-    async readLogs(dir, file) {
-        // Placeholder: Implementation would depend on how logs are stored (file vs stdout)
-        // For now, looking for typical log files
-        const logPath = path.join(dir, file);
-        if (fs.existsSync(logPath)) {
-            const data = fs.readFileSync(logPath, 'utf8');
-            return `Latest logs from ${file}:\n${data.slice(-1000)}`;
-        }
-        return `Log file not found at ${logPath}. Ensure bots are logging to file.`;
     }
 
     async checkBalance() {

@@ -21,6 +21,7 @@
     "@dataconnect/generated": "file:src/dataconnect-generated",
     "@drift-labs/sdk": "^2.38.0",
     "@google/generative-ai": "^0.24.1",
+    "@mathieuc/tradingview": "^3.5.2",
     "@modelcontextprotocol/sdk": "^1.0.4",
     "@mrgnlabs/marginfi-client-v2": "^6.1.4",
     "@mrgnlabs/mrgn-common": "^2.0.7",

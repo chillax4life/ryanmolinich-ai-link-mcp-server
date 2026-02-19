@@ -34,7 +34,7 @@ async function run() {
     // 1. Create ONE Shared Connection ( The "AI Internet" Hub )
     const transport = new StdioClientTransport({
         command: 'node',
-        args: ['/Users/ryanmolinich/ai-link-mcp-server/index.js']
+        args: ['/Users/ryanmolinich/Projects/ai-link-mcp-server/index.js']
     });
 
     const sharedClient = new Client({
@@ -112,7 +112,7 @@ async function run() {
             aiId: 'solana-bot-master',
             name: 'Solana Bot Master',
             capabilities: ['solana_monitor', 'bot_control', 'log_reader'],
-            metadata: { project: 'solana-mosh-pit' }
+            metadata: { project: 'ai-link-mcp-server' }
         })
     ];
 

@@ -1,5 +1,5 @@
 
-import { AgentFramework } from './AgentFramework.js';
+import { Agent } from './AgentFramework.js';
 import fs from 'fs';
 import path from 'path';
 
@@ -14,7 +14,7 @@ import path from 'path';
  *    - If Auto Mode: Delegates trade execution to DriftAgent.
  *    - If Manual Mode: Alerts User via MasterAgent to take action.
  */
-export class StrategyAgent extends AgentFramework {
+export class StrategyAgent extends Agent {
     constructor(config) {
         super(config);
 

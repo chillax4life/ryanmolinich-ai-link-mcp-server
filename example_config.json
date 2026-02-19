@@ -3,7 +3,7 @@
     "ai-link": {
       "command": "node",
       "args": [
-        "/Users/ryanmolinich/ai-link-mcp-server/index.js"
+        "/Users/ryanmolinich/Projects/ai-link-mcp-server/index.js"
       ]
     },
     "context7": {

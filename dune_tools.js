@@ -1,7 +1,6 @@
-import fetch from 'node-fetch'; // Standard fetch or cross-fetch might be needed if node version < 18, but Node 18+ has native fetch. 
-// However, to be safe in this repo's context, we'll try native global fetch first, assuming Node 18+.
+import fetch from 'node-fetch';
 
-const DUNE_API_KEY = process.env.DUNE_API_KEY || 'RYtdOhwKO8U6O0FMHo5ozUXpOB5MjIGd';
+const DUNE_API_KEY = process.env.DUNE_API_KEY;
 
 export const duneTools = [
     {

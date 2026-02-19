@@ -21,8 +21,8 @@ export class MasterAgent extends Agent {
 
         if (this.apiKey) {
             this.genAI = new GoogleGenerativeAI(this.apiKey);
-            this.model = this.genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-            console.log(`[${this.name}] Intelligence Level: HIGH (Gemini Active)`);
+            this.model = this.genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+            console.log(`[${this.name}] Intelligence Level: HIGH (Gemini 2.0 Flash Active)`);
         } else {
             console.warn(`[${this.name}] Intelligence Level: LOW (Regex Fallback - No API Key)`);
         }

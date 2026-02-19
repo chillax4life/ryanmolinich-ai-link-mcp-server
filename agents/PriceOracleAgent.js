@@ -32,19 +32,6 @@ export class PriceOracleAgent extends SolanaAgent {
     }
 
     /**
-     * Get Token Price (Simulated fallback if no Helius)
-     * In a real implementation, this would query a DAS API or a specific Pool Account.
-     */
-    async getPrice(tokenSymbol) {
-        if (this.helius) {
-            // Placeholder: Use Helius DAS to get asset info
-            // const asset = await this.helius.rpc.getAsset({ id: '...' });
-            return `[Helius] Price for ${tokenSymbol}: (Requires Pool Address Config)`;
-        }
-        return `[Oracle] Price for ${tokenSymbol}: Metric (Offline)`;
-    }
-
-    /**
      * Generic Account Monitor (Standard RPC fallback)
      * @param {string} accountAddress - PublicKey to monitor
      * @param {string} label - Label for logging

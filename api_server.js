@@ -29,8 +29,8 @@ const authMiddleware = (req, res, next) => {
     // Actually, express.static is BEFORE this middleware, so it's already public.
     // We only need to protect API routes.
 
-    // Explicitly allow health check
-    if (req.path === '/api/health' && req.method === 'GET') {
+    // Explicitly allow health check and stats and signals
+    if ((req.path === '/api/health' || req.path === '/api/stats' || req.path === '/api/signal') && req.method === 'GET') {
         return next();
     }
 
@@ -50,11 +50,41 @@ const authMiddleware = (req, res, next) => {
 app.use(authMiddleware);
 
 import { getAllAIs, getAllTasks, getMessages, saveMessage } from './database.js';
+import { tradingDiscipline } from './trading_discipline.js';
+import { getTradingViewSignals } from './tradingview_service.js';
 
 // Routes
 // Renamed root handler to /api/health so it doesn't shadow index.html
 app.get('/api/health', (req, res) => {
     res.send('AI Link API Server is running. Authentication enabled.');
+});
+
+app.get('/api/stats', (req, res) => {
+    try {
+        const report = tradingDiscipline.getDailyReport();
+        res.json({
+            ...report,
+            config: {
+                maxDailyLossUsd: tradingDiscipline.config.maxDailyLossUsd,
+                maxPositionSizeUsd: tradingDiscipline.config.maxPositionSizeUsd,
+                tradingMode: tradingDiscipline.config.tradingMode
+            }
+        });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.get('/api/signal', async (req, res) => {
+    const { symbol, interval } = req.query;
+    if (!symbol) return res.status(400).json({ error: 'Missing symbol' });
+    try {
+        // Default to '60' (1 hour) if not provided
+        const signals = await getTradingViewSignals(symbol.toString(), interval ? interval.toString() : '60');
+        res.json(signals);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
 });
 
 // --- Dashboard API Endpoints ---

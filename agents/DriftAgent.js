@@ -22,24 +22,24 @@ export class DriftAgent extends SolanaAgent {
     }
 
     async initialize(client) {
-        // 1. Base Init (MCP Register + Wallet Load + RPC Connect)
         await super.initialize(client);
 
-        // 2. Initialize Drift Client
         if (this.keypair) {
-            const wallet = new Wallet(this.keypair);
-            this.driftClient = new DriftClient({
-                connection: this.connection,
-                wallet: wallet,
-                env: this.env
-            });
-
-            console.log(`[${this.name}] Subscribing to Drift Client (${this.env})...`);
             try {
+                const wallet = new Wallet(this.keypair);
+                this.driftClient = new DriftClient({
+                    connection: this.connection,
+                    wallet: wallet,
+                    env: this.env
+                });
+
+                console.log(`[${this.name}] Subscribing to Drift Client (${this.env})...`);
                 await this.driftClient.subscribe();
                 console.log(`[${this.name}] Drift Client Active.`);
             } catch (e) {
-                console.error(`[${this.name}] Failed to subscribe to Drift: ${e.message}`);
+                console.error(`[${this.name}] Failed to initialize Drift Client: ${e.message}`);
+                console.warn(`[${this.name}] Running in degraded mode (no Drift connection).`);
+                this.driftClient = null;
             }
         } else {
             console.warn(`[${this.name}] No Wallet found. Drift Agent starting in Read-Only/Offline mode.`);

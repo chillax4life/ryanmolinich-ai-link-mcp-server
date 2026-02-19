@@ -3,58 +3,197 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Link Node | Premium Dashboard</title>
-    <link rel="stylesheet" href="style.css">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;600&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <title>Prop Firm Dashboard | AI Link</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
+    <style>
+        body { background-color: #0f172a; color: #e2e8f0; }
+        .card { background-color: #1e293b; border-radius: 0.5rem; padding: 1.5rem; }
+        .blink { animation: blinker 1s linear infinite; }
+        @keyframes blinker { 50% { opacity: 0; } }
+    </style>
 </head>
-<body>
-    <div class="app-container">
-        <!-- Sidebar: Agent Status -->
-        <aside class="sidebar">
-            <div class="logo-area">
-                <h1>AI LINK <span class="node-id">NODE-01</span></h1>
+<body class="p-6 max-w-7xl mx-auto">
+    
+    <header class="flex justify-between items-center mb-8">
+        <div>
+            <h1 class="text-3xl font-bold text-white">Augmented Trader</h1>
+            <p class="text-slate-400">Prop Firm Readiness Monitor</p>
+        </div>
+        <div class="flex gap-4">
+            <div class="text-right">
+                <div class="text-sm text-slate-400">Status</div>
+                <div id="status-indicator" class="font-bold text-green-400">ACTIVE</div>
             </div>
-            
-            <div class="agents-list" id="agentsList">
-                <!-- Injected via JS -->
-                <div class="agent-card skeleton"></div>
-                <div class="agent-card skeleton"></div>
+            <div class="text-right">
+                <div class="text-sm text-slate-400">Mode</div>
+                <div id="mode-indicator" class="font-bold text-yellow-400">LOADING...</div>
             </div>
+        </div>
+    </header>
 
-            <div class="system-stats">
-                <div class="stat-item">
-                    <span class="label">STATUS</span>
-                    <span class="value alive">ONLINE</span>
-                </div>
-                <div class="stat-item">
-                    <span class="label">NET</span>
-                    <span class="value">DEVNET</span>
-                </div>
-            </div>
-        </aside>
-
-        <!-- Main Chat Area -->
-        <main class="chat-interface">
-            <header class="chat-header">
-                <h2>COMMAND CHANNEL</h2>
-                <div class="connection-status" id="connStatus">CONNECTED</div>
-            </header>
-
-            <div class="messages-container" id="messagesContainer">
-                <div class="message system">
-                    <div class="bubble">System initialized. Welcome, Operator.</div>
-                </div>
-                <!-- Messages injected here -->
-            </div>
-
-            <footer class="input-area">
-                <input type="text" id="chatInput" placeholder="Command the Swarm... (e.g. 'Check SOL price', 'Open Long')" autocomplete="off">
-                <button id="sendBtn">SEND</button>
-            </footer>
-        </main>
+    <!-- Top Metrics -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+        <div class="card border-l-4 border-blue-500">
+            <div class="text-slate-400 text-sm">Win Rate</div>
+            <div id="win-rate" class="text-3xl font-bold">0.0%</div>
+            <div class="text-xs text-slate-500 mt-1">Target: >40%</div>
+        </div>
+        <div class="card border-l-4 border-green-500">
+            <div class="text-slate-400 text-sm">Total PnL</div>
+            <div id="total-pnl" class="text-3xl font-bold">$0.00</div>
+            <div class="text-xs text-slate-500 mt-1">All Time</div>
+        </div>
+        <div class="card border-l-4 border-red-500">
+            <div class="text-slate-400 text-sm">Daily Loss</div>
+            <div id="daily-loss" class="text-3xl font-bold text-green-400">$0.00</div>
+            <div class="text-xs text-slate-500 mt-1">Limit: $50.00</div>
+        </div>
+        <div class="card border-l-4 border-purple-500">
+            <div class="text-slate-400 text-sm">Trades Today</div>
+            <div id="trades-today" class="text-3xl font-bold">0</div>
+            <div class="text-xs text-slate-500 mt-1">Max: 3</div>
+        </div>
     </div>
 
-    <script src="app.js"></script>
+    <!-- Charts Row -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+        <!-- Equity Curve -->
+        <div class="card lg:col-span-2 h-96 flex flex-col">
+            <h3 class="font-bold text-lg mb-4">Equity Curve</h3>
+            <div id="chart-container" class="flex-grow w-full"></div>
+        </div>
+
+        <!-- Recent Activity -->
+        <div class="card h-96 overflow-auto">
+            <h3 class="font-bold text-lg mb-4">Recent Trades</h3>
+            <div id="trades-list" class="space-y-3">
+                <!-- Trades injected here -->
+                <div class="text-slate-500 text-center py-4">Loading trades...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function fetchStats() {
+            try {
+                const res = await fetch('/api/stats');
+                const data = await res.json();
+                renderDashboard(data);
+            } catch (e) {
+                console.error("Failed to fetch stats:", e);
+            }
+        }
+
+        function renderDashboard(data) {
+            // Metrics
+            document.getElementById('win-rate').innerText = `${data.winRate}%`;
+            
+            const pnlEl = document.getElementById('total-pnl');
+            pnlEl.innerText = `$${data.totalPnL.toFixed(2)}`;
+            pnlEl.className = `text-3xl font-bold ${data.totalPnL >= 0 ? 'text-green-400' : 'text-red-400'}`;
+
+            const dailyEl = document.getElementById('daily-loss');
+            const dailyPnL = data.discipline.dailyPnL;
+            dailyEl.innerText = `$${Math.abs(dailyPnL).toFixed(2)}`;
+            
+            // Blink red if close to limit ($50)
+            const limit = data.config.maxDailyLossUsd || 50;
+            if (dailyPnL <= -limit) {
+                dailyEl.className = 'text-3xl font-bold text-red-500 blink';
+            } else if (dailyPnL <= -(limit * 0.8)) {
+                dailyEl.className = 'text-3xl font-bold text-orange-400';
+            } else {
+                dailyEl.className = 'text-3xl font-bold text-green-400';
+            }
+
+            document.getElementById('trades-today').innerText = `${data.discipline.tradeCount} / 3`;
+            document.getElementById('mode-indicator').innerText = (data.config.tradingMode || 'UNKNOWN').toUpperCase();
+
+            // Trades List
+            const list = document.getElementById('trades-list');
+            if (data.trades.length === 0) {
+                list.innerHTML = '<div class="text-slate-500 text-center py-4">No trades yet.</div>';
+            } else {
+                list.innerHTML = data.trades.slice().reverse().slice(0, 10).map(t => `
+                    <div class="flex justify-between items-center p-3 bg-slate-800 rounded border-l-2 ${t.pnl >= 0 ? 'border-green-500' : 'border-red-500'}">
+                        <div>
+                            <div class="font-bold">${t.side.toUpperCase()} ${t.symbol}</div>
+                            <div class="text-xs text-slate-400">${new Date(t.timestamp).toLocaleTimeString()}</div>
+                        </div>
+                        <div class="text-right">
+                            <div class="${t.pnl >= 0 ? 'text-green-400' : 'text-red-400'} font-mono font-bold">
+                                ${t.pnl >= 0 ? '+' : ''}$${(t.pnl || 0).toFixed(2)}
+                            </div>
+                            <div class="text-xs text-slate-500">${t.reason || 'Manual'}</div>
+                        </div>
+                    </div>
+                `).join('');
+            }
+
+            updateChart(data.trades);
+        }
+
+        // Chart Setup
+        const chartContainer = document.getElementById('chart-container');
+        const chart = LightweightCharts.createChart(chartContainer, {
+            layout: { background: { type: 'solid', color: 'transparent' }, textColor: '#94a3b8' },
+            grid: { vertLines: { color: '#334155' }, horzLines: { color: '#334155' } },
+            width: chartContainer.clientWidth,
+            height: chartContainer.clientHeight,
+            timeScale: { timeVisible: true, secondsVisible: false }
+        });
+        const areaSeries = chart.addAreaSeries({
+            lineColor: '#3b82f6', topColor: 'rgba(59, 130, 246, 0.4)', bottomColor: 'rgba(59, 130, 246, 0.0)'
+        });
+
+        // Resize handler
+        window.addEventListener('resize', () => {
+            chart.resize(chartContainer.clientWidth, chartContainer.clientHeight);
+        });
+
+        function updateChart(trades) {
+            let runningPnL = 0;
+            // Sort by time ascending
+            const sorted = trades.slice().sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+            
+            const data = sorted.map(t => {
+                runningPnL += (t.pnl || 0);
+                return { 
+                    time: new Date(t.timestamp).getTime() / 1000, 
+                    value: runningPnL 
+                };
+            });
+            
+            // Add start point if empty or just to show baseline
+            if (data.length === 0) {
+                const now = Math.floor(Date.now() / 1000);
+                data.push({ time: now - 3600, value: 0 });
+                data.push({ time: now, value: 0 });
+            } else if (data.length > 0) {
+                // Ensure we start at 0
+                if (data[0].value !== 0) {
+                    data.unshift({ time: data[0].time - 3600, value: 0 });
+                }
+            }
+
+            // Deduplicate times (Lightweight charts crashes on dupes)
+            const uniqueData = [];
+            const seenTimes = new Set();
+            for (const p of data) {
+                if (!seenTimes.has(p.time)) {
+                    uniqueData.push(p);
+                    seenTimes.add(p.time);
+                }
+            }
+
+            areaSeries.setData(uniqueData);
+            chart.timeScale().fitContent();
+        }
+
+        // Auto Refresh
+        fetchStats();
+        setInterval(fetchStats, 5000);
+    </script>
 </body>
 </html>
