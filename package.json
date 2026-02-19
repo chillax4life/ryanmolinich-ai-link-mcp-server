@@ -23,6 +23,7 @@
     "@google/generative-ai": "^0.24.1",
     "@mathieuc/tradingview": "^3.5.2",
     "@modelcontextprotocol/sdk": "^1.0.4",
+    "@modelcontextprotocol/server-memory": "^2026.1.26",
     "@mrgnlabs/marginfi-client-v2": "^6.1.4",
     "@mrgnlabs/mrgn-common": "^2.0.7",
     "@solana/web3.js": "^1.98.4",

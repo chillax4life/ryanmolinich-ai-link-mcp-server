@@ -14,6 +14,9 @@ open_positions.json
 pending_trades.json
 *.json.backup
 
+# AI Memory
+memory/
+
 # Screenshots
 *.png
 
