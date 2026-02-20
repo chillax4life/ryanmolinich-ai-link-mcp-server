@@ -1,5 +1,6 @@
 use anyhow::Result;
 use solana_sdk::pubkey::Pubkey;
+use borsh::BorshDeserialize;
 use solana_client::nonblocking::rpc_client::RpcClient;
 
 // Use the orca client crate
@@ -18,7 +19,7 @@ impl OrcaClient {
         // Deserialize using the SDK
         // Note: In real logic, we'd check owner == standard Whirlpool Program ID
         use anchor_lang::AccountDeserialize;
-        let pool = Whirlpool::try_deserialize(&mut account_data.as_slice())?;
+        let pool = Whirlpool::deserialize(&mut account_data.as_slice())?;
 
         // Price from sqrt_price
         // Price = (sqrt_price / 2^64)^2

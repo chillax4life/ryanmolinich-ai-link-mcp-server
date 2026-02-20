@@ -5,5 +5,7 @@
     "kamino-scope": "/Users/ryanmolinich/Kamino-Scope",
     "helius-proxy": "/Users/ryanmolinich/helius-rpc-proxy",
     "flash-perpetuals": "/Users/ryanmolinich/flash-perpetuals",
-    "flash-sdk": "/Users/ryanmolinich/flash-sdk-rust"
+    "flash-sdk": "/Users/ryanmolinich/flash-sdk-rust",
+    "pocket-options": "/Users/ryanmolinich/Projects/pocket-options-bot",
+    "solana-arbitrage": "/Users/ryanmolinich/Projects/solana-arbitrage"
 }

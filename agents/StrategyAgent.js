@@ -19,32 +19,36 @@ export class StrategyAgent extends Agent {
         super(config);
 
         // Configuration
-        this.symbol = config.symbol || 'SOL';
-        this.timeframe = config.timeframe || 2000; // Poll every 2s (matches FlashTrade)
-        this.autoExecution = config.autoExecution || false; // Default to Manual/Signal mode
+        this.symbols = config.symbols || ['SOL', 'BTC', 'ETH', 'WIF', 'BONK'];
+        this.timeframe = config.timeframe || 10000; // Increased to 10s for multi-symbol
+        this.autoExecution = config.autoExecution || false;
 
         // SMA Settings
         this.fastPeriod = 5;
         this.slowPeriod = 10;
 
-        // State
-        this.priceHistory = [];
-        this.position = null; // 'LONG', 'SHORT', or null
+        // State per Symbol
+        this.states = {};
+        this.symbols.forEach(sym => {
+            this.states[sym] = {
+                priceHistory: [],
+                position: null,
+                lastSignal: null
+            };
+        });
+
         this.stateFile = path.resolve(process.cwd(), 'strategy_state.json');
 
-        // Dependencies (Injected)
+        // Dependencies
         this.oracle = null;
         this.drift = null;
 
-        this.db = config.db; // Access to DB for logging
         this.loadState();
     }
 
     async initialize(client) {
         await super.initialize(client);
-        console.log(`[${this.name}] Strategy Initialized. Monitoring ${this.symbol}. Auto-Execute: ${this.autoExecution}`);
-
-        // Start the Heartbeat
+        console.log(`[${this.name}] Strategy Multi-Asset Mode. Monitoring: ${this.symbols.join(', ')}`);
         this.startLoop();
     }
 
@@ -57,9 +61,11 @@ export class StrategyAgent extends Agent {
         try {
             if (fs.existsSync(this.stateFile)) {
                 const data = JSON.parse(fs.readFileSync(this.stateFile, 'utf8'));
-                this.position = data.position;
+                if (data.states) {
+                    this.states = { ...this.states, ...data.states };
+                }
                 this.autoExecution = data.autoExecution ?? this.autoExecution;
-                console.log(`[${this.name}] State loaded. Position: ${this.position}, Auto: ${this.autoExecution}`);
+                console.log(`[${this.name}] State loaded for ${Object.keys(this.states).length} symbols.`);
             }
         } catch (e) {
             console.error(`[${this.name}] Failed to load state:`, e.message);
@@ -68,7 +74,7 @@ export class StrategyAgent extends Agent {
 
     saveState() {
         const data = {
-            position: this.position,
+            states: this.states,
             autoExecution: this.autoExecution,
             updated: Date.now()
         };
@@ -84,101 +90,90 @@ export class StrategyAgent extends Agent {
     async logicLoop() {
         if (!this.oracle) return;
 
-        // 1. Fetch Price
-        let price = null;
-        try {
-            price = await this.oracle.getPrice(this.symbol);
-        } catch (e) {
-            console.error(`[${this.name}] Oracle Error: ${e.message}`);
-            return;
+        for (const symbol of this.symbols) {
+            try {
+                const price = await this.oracle.getPrice(symbol);
+                if (!price) continue;
+
+                const state = this.states[symbol];
+                state.priceHistory.push(price);
+                if (state.priceHistory.length > this.slowPeriod + 5) {
+                    state.priceHistory.shift();
+                }
+
+                const smaFast = this.calculateSMA(symbol, this.fastPeriod);
+                const smaSlow = this.calculateSMA(symbol, this.slowPeriod);
+
+                if (smaFast && smaSlow) {
+                    await this.checkSignals(symbol, price, smaFast, smaSlow);
+                }
+            } catch (e) {
+                console.error(`[${this.name}] Error processing ${symbol}: ${e.message}`);
+            }
         }
-
-        if (!price || typeof price !== 'number') return;
-
-        // 2. Update History
-        this.priceHistory.push(price);
-        if (this.priceHistory.length > this.slowPeriod + 5) {
-            this.priceHistory.shift(); // Keep buffer small
-        }
-
-        // 3. Calculate SMAs
-        const smaFast = this.calculateSMA(this.fastPeriod);
-        const smaSlow = this.calculateSMA(this.slowPeriod);
-
-        if (!smaFast || !smaSlow) return; // Not enough data yet
-
-        // console.log(`[${this.name}] Price: $${price} | Fast(${this.fastPeriod}): ${smaFast.toFixed(2)} | Slow(${this.slowPeriod}): ${smaSlow.toFixed(2)}`);
-
-        // 4. Check Crossover Logic
-        await this.checkSignals(price, smaFast, smaSlow);
     }
 
-    calculateSMA(period) {
-        if (this.priceHistory.length < period) return null;
-        const slice = this.priceHistory.slice(-period);
-        const sum = slice.reduce((a, b) => a + b, 0);
+    calculateSMA(symbol, period) {
+        const history = this.states[symbol].priceHistory;
+        if (history.length < period) return null;
+        const sum = history.slice(-period).reduce((a, b) => a + b, 0);
         return sum / period;
     }
 
-    async checkSignals(price, fast, slow) {
-        // GOLDEN CROSS (Bullish)
-        if (fast > slow && this.position !== 'LONG') {
-            console.log(`[${this.name}] 🚀 GOLDEN CROSS DETECTED! (Fast ${fast.toFixed(2)} > Slow ${slow.toFixed(2)})`);
-            await this.executeSignal('LONG', price);
+    async checkSignals(symbol, price, fast, slow) {
+        const state = this.states[symbol];
+        
+        // GOLDEN CROSS
+        if (fast > slow && state.position !== 'LONG') {
+            await this.executeSignal(symbol, 'LONG', price);
         }
-        // DEATH CROSS (Bearish)
-        else if (fast < slow && this.position !== 'SHORT') {
-            console.log(`[${this.name}] 📉 DEATH CROSS DETECTED! (Fast ${fast.toFixed(2)} < Slow ${slow.toFixed(2)})`);
-            await this.executeSignal('SHORT', price);
+        // DEATH CROSS
+        else if (fast < slow && state.position !== 'SHORT') {
+            await this.executeSignal(symbol, 'SHORT', price);
         }
     }
 
-    async executeSignal(type, price) {
-        // Prevent signal spam if we are already in pending state? 
-        // For now, simple state toggle.
-
-        const message = `🤖 **SIGNAL DETECTED**: ${type} ${this.symbol} @ $${price}\nReason: SMA Crossover`;
+    async executeSignal(symbol, type, price) {
+        const state = this.states[symbol];
+        const message = `🤖 **BEST OPPORTUNITY**: ${type} ${symbol} @ $${price}\nReason: Multi-Asset SMA Crossover`;
 
         if (this.autoExecution) {
-            // DELEGATE TO DRIFT AGENT
             if (this.drift) {
-                console.log(`[${this.name}] Auto-Executing ${type}...`);
-                // Close existing if necessary (simplification: DriftAgent needs a 'reverse' or 'close' capability logic)
-                // For now, we simply Open.
-                const result = await this.drift.processRequest(`${type} ${this.symbol} 0.1`); // Fixed size for now
+                console.log(`[${this.name}] Auto-Executing ${type} on ${symbol}...`);
+                const result = await this.drift.processRequest(`${type} ${symbol} 0.1`);
                 await this.sendMessage('master', `${message}\n\n⚡️ **AUTO-EXECUTED**:\n${result}`);
-                this.position = type;
+                state.position = type;
                 this.saveState();
-            } else {
-                console.error(`[${this.name}] Drift Agent not connected!`);
             }
         } else {
-            // MANUAL MODE - NOTIFY USER
-            if (this.position !== type) { // Only notify on change
-                console.log(`[${this.name}] Requesting User Approval for ${type}...`);
-                await this.sendMessage('master', `${message}\n\n👉 **Reply "EXECUTE" to confirm.**`);
-                // We don't update this.position here, we wait for user.
-                // Actually, to prevent spamming, we might want to track 'lastSignal'.
-                this.position = type; // Updating strictly to prevent spamming the same signal every 2s.
+            if (state.lastSignal !== type) {
+                await this.sendMessage('master', `${message}\n\n👉 **Reply "EXECUTE ${symbol}" to confirm.**`);
+                state.lastSignal = type;
                 this.saveState();
             }
         }
     }
 
     async processRequest(input) {
-        if (input.match(/auto on/i)) {
+        const lower = input.toLowerCase();
+        if (lower.match(/auto on/i)) {
             this.autoExecution = true;
             this.saveState();
-            return "✅ Automated Trading ENABLED. I will execute signals via Drift.";
+            return "✅ Multi-Asset Automated Trading ENABLED.";
         }
-        if (input.match(/auto off/i)) {
+        if (lower.match(/auto off/i)) {
             this.autoExecution = false;
             this.saveState();
-            return "🛑 Automated Trading DISABLED. I will only signal you.";
+            return "🛑 Automated Trading DISABLED.";
         }
-        if (input.match(/status/i)) {
-            return `**Strategy Status**:\n- Mode: ${this.autoExecution ? '🤖 AUTO' : '👀 MANUAL'}\n- Position: ${this.position || 'None'}\n- Ticker: ${this.symbol}\n- Last Price: $${this.priceHistory[this.priceHistory.length - 1] || '...'}`;
+        if (lower.match(/status/i)) {
+            let status = `**Multi-Asset Strategy Status** (Auto: ${this.autoExecution ? '🤖 ON' : '👀 OFF'})\n`;
+            for (const sym of this.symbols) {
+                const state = this.states[sym];
+                status += `- ${sym}: ${state.position || 'Neutral'} (Price: $${state.priceHistory[state.priceHistory.length-1] || '...'})\n`;
+            }
+            return status;
         }
-        return "Unknown command. Try 'Auto On', 'Auto Off', or 'Status'.";
+        return "Try 'Auto On', 'Auto Off', or 'Status'.";
     }
 }

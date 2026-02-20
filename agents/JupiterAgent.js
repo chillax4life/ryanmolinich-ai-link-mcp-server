@@ -1,5 +1,5 @@
 import { SolanaAgent } from './SolanaAgent.js';
-import { VersionedTransaction } from '@solana/web3.js';
+import { VersionedTransaction, TransactionInstruction, PublicKey } from '@solana/web3.js';
 import fetchNode from 'node-fetch';
 const fetch = global.fetch || fetchNode;
 
@@ -111,5 +111,60 @@ export class JupiterAgent extends SolanaAgent {
             console.error(`[${this.name}] Swap creation error: ${error.message}`);
             throw error;
         }
+    }
+
+    /**
+     * Fetch raw instructions and lookup tables from Jupiter
+     */
+    async getSwapInstructions(quoteResponse) {
+        if (!this.keypair) throw new Error("Wallet required to fetch instructions.");
+
+        try {
+            const keys = getJupiterKeys();
+            const key = keys[Math.floor(Math.random() * keys.length)];
+
+            const headers = { 'Content-Type': 'application/json' };
+            if (key) headers['x-api-key'] = key;
+
+            const response = await this.fetch(`${JUP_API}/swap-instructions`, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify({
+                    quoteResponse,
+                    userPublicKey: this.keypair.publicKey.toBase58(),
+                    wrapAndUnwrapSol: true
+                })
+            });
+
+            const data = await response.json();
+            if (data.error) throw new Error(data.error);
+
+            // Deserialize all instruction sets
+            return {
+                computeBudgetInstructions: data.computeBudgetInstructions.map(ix => this.deserializeInstruction(ix)),
+                setupInstructions: data.setupInstructions.map(ix => this.deserializeInstruction(ix)),
+                swapInstruction: this.deserializeInstruction(data.swapInstruction),
+                cleanupInstruction: data.cleanupInstruction ? this.deserializeInstruction(data.cleanupInstruction) : null,
+                addressLookupTableAddresses: data.addressLookupTableAddresses.map(addr => new PublicKey(addr))
+            };
+        } catch (error) {
+            console.error(`[${this.name}] Swap instructions error: ${error.message}`);
+            throw error;
+        }
+    }
+
+    /**
+     * Helper to deserialize Jupiter instruction format to TransactionInstruction
+     */
+    deserializeInstruction(ix) {
+        return new TransactionInstruction({
+            programId: new PublicKey(ix.programId),
+            keys: ix.accounts.map(acc => ({
+                pubkey: new PublicKey(acc.pubkey),
+                isSigner: acc.isSigner,
+                isWritable: acc.isWritable
+            })),
+            data: Buffer.from(ix.data, 'base64')
+        });
     }
 }

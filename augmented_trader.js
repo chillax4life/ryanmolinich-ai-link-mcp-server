@@ -1,12 +1,20 @@
 import { tradingDiscipline, handleDisciplineTool } from './trading_discipline.js';
 import { TechnicalIndicators } from './technical_indicators.js';
 import { getTradingViewSignals } from './tradingview_service.js';
+import { handleFlashExecutorTool } from './flash_executor.js';
+import { PriceOracleAgent } from './agents/PriceOracleAgent.js';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// Initialize Oracle for reliable data
+const sharedOracle = new PriceOracleAgent({
+  aiId: 'trader-oracle',
+  name: 'TraderOracle'
+});
 
 const PENDING_TRADES_FILE = path.join(__dirname, 'pending_trades.json');
 const OPEN_POSITIONS_FILE = path.join(__dirname, 'open_positions.json');
@@ -77,7 +85,16 @@ const COINGECKO_IDS = {
 
 async function fetchPrice(symbol) {
   try {
-    const id = COINGECKO_IDS[symbol.toUpperCase()] || symbol.toLowerCase();
+    const sym = symbol.toUpperCase();
+    
+    // 1. Try Kamino Scope (Reliable Data)
+    if (['SOL', 'BTC', 'ETH'].includes(sym)) {
+      const price = await sharedOracle.getKaminoPrice(sym);
+      if (price) return price;
+    }
+
+    // 2. Fallback to CoinGecko
+    const id = COINGECKO_IDS[sym] || symbol.toLowerCase();
     const response = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${id}&vs_currencies=usd`);
     const data = await response.json();
     return data[id]?.usd || null;
@@ -301,7 +318,7 @@ function generateRecommendation(symbol, price, bias, confidence) {
 }
 
 function prepareTrade(params) {
-  const { symbol, side, size, leverage, entryPrice, stopLoss } = params;
+  const { symbol, side, size, leverage, entryPrice, stopLoss, collateralUsd } = params;
   
   const disciplineCheck = tradingDiscipline.canTrade();
   if (!disciplineCheck.allowed) {
@@ -327,6 +344,7 @@ function prepareTrade(params) {
     side: side.toLowerCase(),
     size: parseFloat(size),
     leverage: parseFloat(leverage) || 20,
+    collateralUsd: parseFloat(collateralUsd) || 1.0, // Default to $1.00 for safety
     entryPrice: parseFloat(price),
     stopLoss: parseFloat(sl),
     riskAmount: parseFloat(riskAmount.toFixed(2)),
@@ -377,6 +395,33 @@ async function executeTrade(tradeId, wallet = null) {
   trade.executedAt = new Date().toISOString();
 
   try {
+    // 1. Attempt REAL Execution via Flash Executor if TRADING_MODE is set
+    // This will return a 'prepared' on-chain state requiring one more 'EXECUTE FLASH' confirmation
+    if (process.env.TRADING_MODE === 'live' || process.env.TRADING_MODE === 'paper') {
+        const flashResult = await handleFlashExecutorTool('flash_open_position', {
+            symbol: trade.symbol,
+            side: trade.side,
+            sizeUsd: trade.size,
+            collateralUsd: trade.collateralUsd || 1.0,
+            leverage: trade.leverage
+        });
+
+        if (flashResult.prepared) {
+            PENDING_TRADES.delete(tradeId);
+            savePendingTrades(PENDING_TRADES);
+            return {
+                executed: true,
+                status: 'prepared_on_chain',
+                message: `✅ **ON-CHAIN POSITION PREPARED (${process.env.TRADING_MODE.toUpperCase()})**\n\n` +
+                         `The Flash.trade transaction is ready.\n` +
+                         `Reply **EXECUTE FLASH** to sign and broadcast.`
+            };
+        } else if (flashResult.error) {
+            throw new Error(`Flash Executor failed: ${flashResult.error}`);
+        }
+    }
+
+    // 2. Fallback to Mock Execution (Standard)
     const position = {
       ...trade,
       id: `POS-${trade.symbol}-${Date.now().toString().slice(-4)}`,
@@ -554,6 +599,7 @@ export function getAugmentedTraderTools() {
           side: { type: 'string', enum: ['long', 'short'], description: 'Trade direction' },
           size: { type: 'number', description: 'Position size in USD (minimum $1)' },
           leverage: { type: 'number', description: 'Leverage (default 20)' },
+          collateralUsd: { type: 'number', description: 'Collateral to use in USD (default $1.00)' },
           entryPrice: { type: 'number', description: 'Entry price (optional, uses current)' },
           stopLoss: { type: 'number', description: 'Stop loss price (optional, auto-calculated)' }
         },
@@ -600,6 +646,11 @@ export function getAugmentedTraderTools() {
       }
     },
     {
+      name: 'trading_best_opportunity',
+      description: 'Analyze all supported symbols and return the single best trading opportunity based on highest confidence.',
+      inputSchema: { type: 'object', properties: {} }
+    },
+    {
       name: 'trading_pending',
       description: 'List trades awaiting confirmation.',
       inputSchema: { type: 'object', properties: {} }
@@ -607,10 +658,35 @@ export function getAugmentedTraderTools() {
   ];
 }
 
+async function findBestOpportunity() {
+  const symbols = ['SOL', 'BTC', 'ETH', 'WIF', 'BONK'];
+  const results = await Promise.all(symbols.map(s => analyzeMarket(s)));
+  
+  const validTrades = results
+    .filter(r => !r.error && r.recommendation.action === 'trade')
+    .sort((a, b) => b.confidence - a.confidence);
+
+  if (validTrades.length === 0) {
+    return {
+      message: "No strong opportunities detected across " + symbols.join(', '),
+      recommendation: { action: 'wait', reason: 'Low market confidence' }
+    };
+  }
+
+  const best = validTrades[0];
+  return {
+    message: `🌟 **BEST OPPORTUNITY FOUND**: ${best.symbol} (${best.confidence}% Confidence)`,
+    bestOpportunity: best
+  };
+}
+
 export async function handleAugmentedTraderTool(name, args) {
   switch (name) {
     case 'trading_analyze':
       return await analyzeMarket(args.symbol);
+
+    case 'trading_best_opportunity':
+      return await findBestOpportunity();
 
     case 'trading_prepare':
       return prepareTrade(args);

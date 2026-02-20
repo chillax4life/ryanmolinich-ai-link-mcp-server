@@ -92,24 +92,34 @@ export class PriceOracleAgent extends SolanaAgent {
             const price = await this.getKaminoPrice(sym);
             if (price) return price;
         } catch (e) {
-            console.warn(`[${this.name}] Kamino Scope failed: ${e.message}`);
+            console.warn(`[${this.name}] Kamino Scope failed for ${sym}: ${e.message}`);
         }
 
         // 2. Fetch from CoinGecko (Backup)
         try {
+            const COINGECKO_IDS = {
+                'SOL': 'solana',
+                'BTC': 'bitcoin',
+                'ETH': 'ethereum',
+                'WIF': 'dogwifcoin',
+                'BONK': 'bonk',
+                'JUP': 'jupiter-exchange-solana'
+            };
+
+            const id = COINGECKO_IDS[sym] || sym.toLowerCase();
             const fetch = global.fetch || (await import('node-fetch')).default;
-            const response = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd`);
+            const response = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${id}&vs_currencies=usd`);
 
             if (!response.ok) {
                 console.error(`[${this.name}] HTTP Error: ${response.status} ${response.statusText}`);
             }
 
             const data = await response.json();
-            if (data.solana && data.solana.usd) {
-                return parseFloat(data.solana.usd);
+            if (data[id] && data[id].usd) {
+                return parseFloat(data[id].usd);
             }
         } catch (e) {
-            console.error(`[${this.name}] CoinGecko failed: ${e.message}`);
+            console.error(`[${this.name}] CoinGecko failed for ${sym}: ${e.message}`);
         }
 
         console.warn(`[${this.name}] Failed to get real price for ${sym}. Returning null.`);
@@ -120,21 +130,22 @@ export class PriceOracleAgent extends SolanaAgent {
      * Reads "Solid Ass Reliable Data" from Kamino Scope on Mainnet.
      */
     async getKaminoPrice(symbol) {
-        if (symbol !== 'SOL') return null; // Logic only hardcoded for SOL (Index 0) for now.
+        // Mapping of symbols to Kamino Scope Indices (Mainnet verified Feb 2026)
+        const SCOPE_INDICES = {
+            'SOL': 0,
+            'ETH': 1,
+            'BTC': 2,
+            'USDC': 11, // Verified as ~1.01
+            'USDT': 12,
+        };
+
+        const index = SCOPE_INDICES[symbol.toUpperCase()];
+        if (index === undefined) return null;
 
         // Kamino Scope Prices Account (Mainnet)
-        // From configs/mainnet/3NJYftD5sjVfxSnUdZ1wVML8f3aC6mp1CXCL6L7TnU8C.json
         const SCOPE_PRICES_ACCOUNT = '3NJYftD5sjVfxSnUdZ1wVML8f3aC6mp1CXCL6L7TnU8C';
 
-        // Ensure we are using a Mainnet RPC for this specific call
-        // If current connection is Devnet, this will fail (Account not found).
-        // So we create a temporary connection to Mainnet if needed.
         const { Connection, PublicKey } = await import('@solana/web3.js');
-        let connection = this.connection;
-
-        // Check if we need to switch to Mainnet for this read
-        // Simple heuristic: If we can't find the account, try Mainnet.
-        // But better: Just use Mainnet explicitly for Oracle Data.
         const mainnetConn = new Connection('https://api.mainnet-beta.solana.com');
 
         const pubkey = new PublicKey(SCOPE_PRICES_ACCOUNT);
@@ -144,25 +155,20 @@ export class PriceOracleAgent extends SolanaAgent {
             throw new Error(`Scope Account ${SCOPE_PRICES_ACCOUNT} not found.`);
         }
 
-        // DECODE SOL (Index 0)
         // Offset Calculation:
         // Discriminator (8) + OracleMappings Pk (32) = 40 bytes.
         // DatedPrice Struct = 56 bytes.
-        // Index 0 Start = 40.
+        // Start = 40 + (index * 56)
 
-        const offset = 40;
+        const offset = 40 + (index * 56);
         const data = accountInfo.data;
 
-        // Read Value (u64 LE) at 40
-        // Read Exp (u64 LE) at 48
+        if (data.length < offset + 16) return null;
 
         const value = data.readBigUInt64LE(offset); // value
         const exp = data.readBigUInt64LE(offset + 8); // exponent
 
-        // Price = value * 10^(-exp)
         const price = Number(value) * Math.pow(10, -Number(exp));
-
-        // console.log(`[${this.name}] Kamino Scope Price (SOL): $${price.toFixed(4)}`);
         return price;
     }
 

@@ -13,6 +13,10 @@ trading_discipline_state.json
 open_positions.json
 pending_trades.json
 *.json.backup
+secrets/
+mcporter.json
+flash_state.json
+server.pid
 
 # AI Memory
 memory/

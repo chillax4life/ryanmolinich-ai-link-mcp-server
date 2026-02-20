@@ -4,19 +4,11 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-solana-client = { workspace = true }
-solana-sdk = { workspace = true }
-tokio = { workspace = true }
-async-trait = { workspace = true }
-anyhow = { workspace = true }
-tracing = { workspace = true }
-
-# Serialization
+solana-client = "1.18.17"
+solana-sdk = "1.18.17"
+anyhow = "1.0"
 borsh = "0.10"
-serde = { workspace = true }
-bytemuck = "1.14"
-
-# Orca SDK
-orca_whirlpools_client = "0.4.1" # Using specific version compatible with anchor 0.29
-
-rpc-manager = { path = "../rpc-manager" }
+log = "0.4"
+thiserror = "1.0"
+orca_whirlpools_client = "0.4.3"
+anchor-lang = "0.29.0"

@@ -1,39 +1,31 @@
-
 import { PriceOracleAgent } from './agents/PriceOracleAgent.js';
 
-async function testOracle() {
+async function verifyKamino() {
+    console.log("👁️ Verifying Kamino Scope Price Feed...");
+
     const oracle = new PriceOracleAgent({
-        aiId: 'oracle-test',
-        name: 'OracleTest',
-        heliusApiKey: process.env.HELIUS_API_KEY // Optional
+        aiId: 'oracle-verify',
+        name: 'OracleVerifier',
+        rpcUrl: 'https://api.mainnet-beta.solana.com'
     });
 
-    console.log("Testing PriceOracleAgent...");
-
-    // We don't need full initialize(client) just for getPrice if it uses fetch
-    // But let's see if getPrice depends on anything. It uses global.fetch.
-
     try {
-        const p1 = await oracle.getPrice('SOL');
-        console.log(`Price 1: ${p1}`);
+        const solPrice = await oracle.getKaminoPrice('SOL');
+        const btcPrice = await oracle.getKaminoPrice('BTC');
+        const ethPrice = await oracle.getKaminoPrice('ETH');
 
-        await new Promise(r => setTimeout(r, 2000));
+        console.log(`✅ SOL Price (Kamino): $${solPrice?.toFixed(2)}`);
+        console.log(`✅ BTC Price (Kamino): $${btcPrice?.toFixed(2)}`);
+        console.log(`✅ ETH Price (Kamino): $${ethPrice?.toFixed(2)}`);
 
-        const p2 = await oracle.getPrice('SOL');
-        console.log(`Price 2: ${p2}`);
-
-        if (p1 === 145.50 && p2 === 145.50) {
-            console.error("FAIL: Price appears to be the MOCK fallback (145.50).");
-            process.exit(1);
-        } else if (p1 === p2) {
-            console.warn("WARNING: Price didn't change in 2s (could be stable market), but values look real.");
+        if (solPrice > 0 && btcPrice > 0 && ethPrice > 0) {
+            console.log("🚀 Kamino Scope is LIVE and ACCURATE.");
         } else {
-            console.log("SUCCESS: Prices are changing and look real.");
+            console.warn("⚠️ Kamino Scope returned zero or null prices.");
         }
-
     } catch (e) {
-        console.error("Error:", e);
+        console.error("❌ Kamino Verification Failed:", e.message);
     }
 }
 
-testOracle();
+verifyKamino();

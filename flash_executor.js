@@ -38,6 +38,9 @@ export async function initializeFlashExecutor(config = {}) {
             console.error(`[FlashExecutor] Failed to load wallet: ${e.message}`);
             return { initialized: false, error: 'Wallet load failed' };
         }
+    } else if (process.env.TRADING_MODE === 'paper') {
+        console.warn('[FlashExecutor] No wallet found. Using DUMMY wallet for PAPER MODE.');
+        wallet = new Wallet(Keypair.generate());
     } else {
         console.warn('[FlashExecutor] No wallet found. Read-only mode unavailable for Flash SDK (requires wallet).');
         return { initialized: false, error: 'Wallet required for Flash SDK' };
@@ -63,9 +66,15 @@ export async function initializeFlashExecutor(config = {}) {
         );
 
         // CRITICAL: Load Address Lookup Tables for transaction optimization
-        await flashClient.loadAddressLookupTable(poolConfig);
+        if (process.env.TRADING_MODE === 'live') {
+            try {
+                await flashClient.loadAddressLookupTable(poolConfig);
+            } catch (e) {
+                console.warn(`[FlashExecutor] Failed to load ALTs: ${e.message}`);
+            }
+        }
 
-        console.log(`[FlashExecutor] Connected to Flash.trade (Crypto.1)`);
+        console.log(`[FlashExecutor] Connected to Flash.trade (Crypto.1) [${process.env.TRADING_MODE || 'paper'} mode]`);
         return { initialized: true, mode: process.env.TRADING_MODE || 'paper', wallet: wallet.publicKey.toBase58() };
     } catch (e) {
         console.error(`[FlashExecutor] Failed to initialize SDK: ${e.message}`);
@@ -232,6 +241,9 @@ export async function executeOpenPosition(confirmCode) {
         const sizeBN = new BN(sizeUsd * 1e6);
         const collateralBN = new BN(collateralUsd * 1e6);
         const side = isLong ? Side.Long : Side.Short;
+
+        const targetToken = poolConfig.tokens.find(t => t.symbol === targetTokenSymbol);
+        if (!targetToken) return { error: `Token ${targetTokenSymbol} not found in pool config` };
 
         // 2. Build Instructions
         // Note: Using 0 as market price placeholder, Flash handles oracle internal

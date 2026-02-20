@@ -84,8 +84,9 @@ export class FlashLoanAgent extends SolanaAgent {
      * @param {string} tokenMint - The token to borrow (e.g. SOL Mint)
      * @param {number} amount - Amount in native units (e.g. Lamports)
      * @param {Array} arbitrageInstructions - The instructions to run with the borrowed funds
+     * @param {Array} addressLookupTableAccounts - ALTs for versioned transactions (optional)
      */
-    async createFlashLoanTx(tokenMint, amount, arbitrageInstructions) {
+    async createFlashLoanTx(tokenMint, amount, arbitrageInstructions, addressLookupTableAccounts = []) {
         if (!this.marginfiClient) {
             throw new Error("MarginFi Client not initialized (RPC/Wallet required)");
         }
@@ -97,22 +98,20 @@ export class FlashLoanAgent extends SolanaAgent {
 
         try {
             // 1. Find the Bank for this token
-            // This requires searching the group's banks for the matching mint
             const bank = this.marginfiClient.group.getBankByMint(new PublicKey(tokenMint));
             if (!bank) throw new Error(`Bank not found for mint: ${tokenMint}`);
 
             // 2. Build the Flash Loan Bundle
-            // The SDK handles [Borrow -> ...Instructions -> Repay]
-            // Note: makeFlashLoanTx usually returns an object with { instructions, signers } or a Transaction
             const flashLoanBundle = await this.marginfiAccount.makeFlashLoanTx({
-                amount: amount, // BN or number
+                amount: amount, 
                 bankAddress: bank.address,
                 options: {
-                    instructions: arbitrageInstructions, // The meat of the sandwich
+                    instructions: arbitrageInstructions, 
+                    addressLookupTableAccounts: addressLookupTableAccounts // Support ALTs
                 }
             });
 
-            return flashLoanBundle; // Returns valid Transaction/Instructions
+            return flashLoanBundle;
         } catch (e) {
             console.error(`[${this.name}] Failed to build Flash Loan: ${e.message}`);
             throw e;

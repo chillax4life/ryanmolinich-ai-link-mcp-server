@@ -106,7 +106,8 @@ export class Agent {
      * Helper to execute MCP tool calls
      */
     async callTool(name, args) {
-        const result = await this.client.callTool({ name, arguments: args });
-        return result.content[0].text;
+        // The client.callTool method (InternalClient) is now responsible for extracting the text.
+        // This method should just return the raw string result.
+        return await this.client.callTool({ name, arguments: args });
     }
 }

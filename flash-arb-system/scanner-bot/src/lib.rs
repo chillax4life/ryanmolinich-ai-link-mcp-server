@@ -1,12 +1,18 @@
 use anyhow::Result;
-use tracing::{info, warn};
+use tracing::{info, warn, error};
 use tokio::time::{sleep, Duration, Instant};
 use std::collections::HashMap;
+use std::sync::Arc;
 use solana_sdk::pubkey::Pubkey;
 use rpc_manager::RpcManager;
+use price_fetcher::{RaydiumClient, OrcaClient};
+use serde::Serialize;
+
+mod broadcast;
+use crate::broadcast::broadcast_opportunity_to_ai_link;
 
 /// Arbitrage opportunity detected by scanner
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct ArbitrageOpportunity {
     pub token_a: Pubkey,
     pub token_b: Pubkey,
@@ -15,7 +21,7 @@ pub struct ArbitrageOpportunity {
     pub spread_bps: u64,  // Basis points (1 bps = 0.01%)
     pub dex_a_name: String,
     pub dex_b_name: String,
-    pub timestamp: Instant,
+    pub timestamp: u64,
 }
 
 impl ArbitrageOpportunity {
@@ -28,11 +34,6 @@ impl ArbitrageOpportunity {
     }
 }
 
-use scanner_bot::ScannerBot;
-use rpc_manager::RpcManager;
-use price_fetcher::{RaydiumClient, OrcaClient, MeteoraClient};
-use std::sync::Arc;
-
 /// High-frequency scanner bot for price discovery
 pub struct ScannerBot {
     rpc_manager: Arc<RpcManager>,
@@ -40,7 +41,6 @@ pub struct ScannerBot {
     scan_interval: Duration,
     raydium_client: RaydiumClient,
     orca_client: OrcaClient,
-    meteora_client: MeteoraClient,
 }
 
 impl ScannerBot {
@@ -51,7 +51,6 @@ impl ScannerBot {
             scan_interval: Duration::from_millis(scan_interval_ms),
             raydium_client: RaydiumClient::new(),
             orca_client: OrcaClient::new(),
-            meteora_client: MeteoraClient::new(),
         }
     }
 
@@ -71,8 +70,12 @@ impl ScannerBot {
                             opp.dex_b_name, opp.dex_b_price
                         );
                         
-                        // TODO: Broadcast to AI-Link queue for first-wave executors
-                        self.broadcast_opportunity(opp).await?;
+                        // Broadcast the opportunity to the AI Link server
+                        let opportunity_json = serde_json::to_string(&opp).unwrap_or_default();
+                        if let Err(e) = broadcast_opportunity_to_ai_link(opportunity_json).await {
+                            error!("Failed to broadcast opportunity to AI Link: {}", e);
+                        }
+                        self.broadcast_opportunity(opp.clone()).await?;
                     }
                 }
                 Err(e) => {
@@ -145,7 +148,7 @@ impl ScannerBot {
                 spread_bps,
                 dex_a_name: "Raydium".to_string(),
                 dex_b_name: "Orca".to_string(),
-                timestamp: Instant::now(),
+                timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
             });
         }
         
@@ -154,7 +157,8 @@ impl ScannerBot {
 
     /// Broadcast opportunity to AI-Link message queue
     async fn broadcast_opportunity(&self, opp: ArbitrageOpportunity) -> Result<()> {
-        // TODO: Send message via AI-Link MCP server
+        // The primary broadcast is now handled via the task queue.
+        // Direct messaging can be added later if needed for specific agent communication.
         // For now, just log
         info!("📡 Broadcasting opportunity to executors");
         Ok(())

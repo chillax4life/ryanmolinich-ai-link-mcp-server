@@ -52,11 +52,44 @@ app.use(authMiddleware);
 import { getAllAIs, getAllTasks, getMessages, saveMessage } from './database.js';
 import { tradingDiscipline } from './trading_discipline.js';
 import { getTradingViewSignals } from './tradingview_service.js';
+import { OPEN_POSITIONS } from './augmented_trader.js';
 
 // Routes
 // Renamed root handler to /api/health so it doesn't shadow index.html
 app.get('/api/health', (req, res) => {
     res.send('AI Link API Server is running. Authentication enabled.');
+});
+
+// --- NEW: Active Positions ---
+app.get('/api/positions', (req, res) => {
+    try {
+        const positions = Array.from(OPEN_POSITIONS.values());
+        res.json({ count: positions.length, positions });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// --- NEW: Risk Status (Placeholder for RiskAgent integration) ---
+app.get('/api/risk-status', (req, res) => {
+    // Ideally, we'd fetch this from the running RiskAgent instance.
+    // For now, we return a static config or read from a shared state file.
+    res.json({
+        status: 'active',
+        threshold: 5.0,
+        lastCheck: new Date().toISOString()
+    });
+});
+
+// --- NEW: Strategy Status (Placeholder) ---
+app.get('/api/strategies', (req, res) => {
+    res.json({
+        strategies: [
+            { name: 'FlashGuardian', type: 'scalp', status: 'active' },
+            { name: 'AtomicArb', type: 'arbitrage', status: 'ready' },
+            { name: 'AugmentedTrader', type: 'manual', status: 'active' }
+        ]
+    });
 });
 
 app.get('/api/stats', (req, res) => {

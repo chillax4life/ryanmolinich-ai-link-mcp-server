@@ -1,4 +1,4 @@
-use solana_client::rpc_client::RpcClient;
+use solana_client::nonblocking::rpc_client::RpcClient;
 use parking_lot::RwLock;
 use std::sync::Arc;
 use std::time::{Duration, Instant};

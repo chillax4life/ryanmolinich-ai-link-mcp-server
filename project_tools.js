@@ -65,11 +65,119 @@ export const projectTools = [
             },
             required: ['projectName', 'query']
         }
+    },
+    {
+        name: 'pocket_options_get_stats',
+        description: 'Read the current performance stats from the Pocket Options bot.',
+        inputSchema: {
+            type: 'object',
+            properties: {}
+        }
+    },
+    {
+        name: 'solana_arb_get_status',
+        description: 'Get the current active positions and funding rates from the Solana Arbitrage bot.',
+        inputSchema: {
+            type: 'object',
+            properties: {}
+        }
+    },
+    {
+        name: 'openclaw_send_notification',
+        description: 'Send a message to the user via OpenClaw channels (Telegram/WhatsApp/iMessage).',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                message: { type: 'string', description: 'The notification content' },
+                channel: { type: 'string', enum: ['telegram', 'whatsapp', 'imessage', 'auto'], default: 'auto' }
+            },
+            required: ['message']
+        }
     }
 ];
 
 export async function handleProjectTool(name, args) {
     switch (name) {
+        case 'openclaw_send_notification': {
+            const { message, channel = 'auto' } = args;
+            // Use the openclaw CLI to broadcast/send
+            const cmd = `~/.openclaw/bin/openclaw broadcast "${message}" --channel=${channel}`;
+            try {
+                await execPromise(cmd);
+                return { content: [{ type: 'text', text: `Notification sent via OpenClaw (${channel}): ${message}` }] };
+            } catch (e) {
+                return { content: [{ type: 'text', text: `Failed to send OpenClaw notification: ${e.message}` }], isError: true };
+            }
+        }
+
+        case 'pocket_options_get_stats': {
+            console.log('[ProjectTools] pocket_options_get_stats: Handler triggered.');
+            const botPath = projectRegistry['pocket-options'];
+            if (!botPath) {
+                console.error('[ProjectTools] pocket_options_get_stats: Project not found in registry.');
+                throw new Error("Pocket Options project not found in registry.");
+            }
+
+            const dataFile = path.join(botPath, 'learning_data.json');
+            console.log(`[ProjectTools] pocket_options_get_stats: Checking for data file at ${dataFile}`);
+
+            if (!fs.existsSync(dataFile)) {
+                console.warn('[ProjectTools] pocket_options_get_stats: learning_data.json not found.');
+                return { content: [{ type: 'text', text: "### Pocket Options Stats\nNo performance data (learning_data.json) found yet." }] };
+            }
+
+            console.log('[ProjectTools] pocket_options_get_stats: Data file found. Reading and parsing...');
+            const data = JSON.parse(fs.readFileSync(dataFile, 'utf-8'));
+            const total = data.length;
+            const wins = data.filter(t => t.result === 'WIN').length;
+            const winRate = total > 0 ? ((wins / total) * 100) : 0;
+            
+            const output = `### Pocket Options Stats\nTotal Trades: ${total}\nWin Rate: ${winRate.toFixed(1)}%\nConfidence: ${Math.min(100, (total / 50) * 100).toFixed(0)}%`;
+            console.log(`[ProjectTools] pocket_options_get_stats: Success. Output: ${output}`);
+            
+            return {
+                content: [{ type: 'text', text: output }]
+            };
+        }
+
+        case 'solana_arb_get_status': {
+            console.log('[ProjectTools] solana_arb_get_status: Handler triggered.');
+            const homeDir = process.env.HOME || '~';
+            const historyFile = path.join(homeDir, '.clawd', 'funding-arb', 'history.json');
+            const tradesFile = path.join(homeDir, '.solarb', 'trades.json');
+            console.log(`[ProjectTools] solana_arb_get_status: Checking for files: ${historyFile}, ${tradesFile}`);
+
+            let output = '### Solana Arb Status\n';
+            let trades = 0;
+            let winRate = 0;
+
+            if (fs.existsSync(tradesFile)) {
+                console.log('[ProjectTools] solana_arb_get_status: trades.json found.');
+                const data = JSON.parse(fs.readFileSync(tradesFile, 'utf-8'));
+                trades = data.length;
+                const wins = data.filter(t => t.success && t.profitUsd > 0).length;
+                winRate = trades > 0 ? (wins / trades) * 100 : 0;
+                output += `Total Trades: ${trades}\nWin Rate: ${winRate.toFixed(1)}%\n`;
+            } else {
+                console.warn('[ProjectTools] solana_arb_get_status: trades.json not found.');
+                output += 'No trade data found.\n';
+            }
+
+            if (fs.existsSync(historyFile)) {
+                console.log('[ProjectTools] solana_arb_get_status: history.json found.');
+                const history = JSON.parse(fs.readFileSync(historyFile, 'utf-8'));
+                const openPositions = history.filter(h => h.type === 'open').length;
+                const closedPositions = history.filter(h => h.type === 'close').length;
+                output += `Open Positions: ${openPositions}\nLifetime Positions: ${closedPositions}`;
+            } else {
+                console.warn('[ProjectTools] solana_arb_get_status: history.json not found.');
+                output += 'No position history found.';
+            }
+            
+            console.log(`[ProjectTools] solana_arb_get_status: Success. Output: ${output}`);
+            return { content: [{ type: 'text', text: output }] };
+        }
+
         case 'list_projects':
             return {
                 content: [{

@@ -23,6 +23,10 @@ import { JupiterAgent } from './agents/JupiterAgent.js';
 import { FlashTradeAgent } from './agents/FlashTradeAgent.js';
 import { MarketAnalyst } from './agents/MarketAnalyst.js';
 import { MasterAgent } from './agents/MasterAgent.js';
+import { IntegratorAgent } from './agents/IntegratorAgent.js';
+import { SwarmAgent } from './agents/SwarmAgent.js';
+import { RiskAgent } from './agents/RiskAgent.js';
+import { Context7Agent } from './agents/Context7Agent.js';
 import { tools as flipsideTools, handlers as flipsideHandlers, initializeFlipside } from './flipside_tools.js';
 import { projectTools, handleProjectTool } from './project_tools.js';
 import { getDisciplineTools, handleDisciplineTool } from './trading_discipline.js';
@@ -547,11 +551,11 @@ class AILinkServer {
     };
 
     // Initialize agents in parallel with graceful failure handling
-    const [oracle, flash, arb, drift, jup, quant, master, flashAgent] = await Promise.all([
+    const [oracle, flash, arb, drift, jup, quant, master, flashAgent, integrator, drone, sentinel, contextAgent] = await Promise.all([
       safeInit(new PriceOracleAgent({
         aiId: 'oracle-1',
         name: 'Oracle Eye',
-        rpcUrl: process.env.RPC_URL || 'https://api.devnet.solana.com',
+        rpcUrl: process.env.SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com',
         heliusApiKey: process.env.HELIUS_API_KEY
       }), 'PriceOracleAgent'),
       
@@ -568,8 +572,8 @@ class AILinkServer {
       safeInit(new DriftAgent({
         aiId: 'drift-1',
         name: 'Drift Bot',
-        rpcUrl: process.env.RPC_URL || 'https://api.devnet.solana.com',
-        env: process.env.DRIFT_ENV || 'devnet'
+        rpcUrl: process.env.SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com',
+        env: 'mainnet-beta'
       }), 'DriftAgent'),
       
       safeInit(new JupiterAgent({
@@ -608,7 +612,28 @@ class AILinkServer {
           wallet: mainnetWallet
         });
         return safeInit(agent, 'FlashTradeAgent');
-      })()
+      })(),
+
+      safeInit(new IntegratorAgent({
+        aiId: 'integrator-1',
+        name: 'Project Integrator'
+      }), 'IntegratorAgent'),
+
+      safeInit(new SwarmAgent({
+        aiId: 'drone-1',
+        name: 'Swarm Drone'
+      }), 'SwarmAgent'),
+
+      safeInit(new RiskAgent({
+        aiId: 'sentinel-1',
+        name: 'Risk Sentinel',
+        dangerZoneThreshold: 5.0
+      }), 'RiskAgent'),
+
+      safeInit(new Context7Agent({
+        aiId: 'context-1',
+        name: 'Context Sage'
+      }), 'Context7Agent')
     ]);
 
     // Initialize Flipside (Global Tool)
@@ -622,19 +647,23 @@ class AILinkServer {
     }
 
     // Log initialized agents
-    const activeAgents = [oracle, flash, arb, drift, jup, quant, master, flashAgent].filter(a => a !== null);
-    console.error(`[System] ${activeAgents.length}/8 agents initialized successfully.`);
+    const activeAgents = [oracle, flash, arb, drift, jup, quant, master, flashAgent, integrator, drone, sentinel, contextAgent].filter(a => a !== null);
+    console.error(`[System] ${activeAgents.length}/12 agents initialized successfully.`);
 
     // --- AGENT HEARTBEAT LOOP ---
     setInterval(async () => {
       try {
         await Promise.all([
           master?.checkMessages().catch(e => {}),
+          integrator?.checkMessages().catch(e => {}),
+          drone?.checkMessages().catch(e => {}),
           drift?.checkMessages().catch(e => {}),
           oracle?.checkMessages().catch(e => {}),
           flashAgent?.checkMessages().catch(e => {}),
           flash?.checkMessages().catch(e => {}),
-          arb?.checkMessages().catch(e => {})
+          arb?.checkMessages().catch(e => {}),
+          sentinel?.checkMessages().catch(e => {}),
+          contextAgent?.checkMessages().catch(e => {})
         ]);
       } catch (err) {
         console.error('[System] Heartbeat Error:', err);
