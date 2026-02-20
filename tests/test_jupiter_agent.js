@@ -1,4 +1,4 @@
-import { JupiterAgent } from './agents/JupiterAgent.js';
+import { JupiterAgent } from '../agents/JupiterAgent.js';
 
 async function runTest() {
     console.log("🪐 Testing Jupiter Agent (The Aggillator)...");

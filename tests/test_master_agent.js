@@ -1,4 +1,4 @@
-import { MasterAgent } from './agents/MasterAgent.js';
+import { MasterAgent } from '../agents/MasterAgent.js';
 
 async function runTest() {
     console.log("🧠 Testing Master Agent (The Brain)...");

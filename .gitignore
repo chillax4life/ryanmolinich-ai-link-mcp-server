@@ -16,7 +16,12 @@ pending_trades.json
 secrets/
 mcporter.json
 flash_state.json
+flash_trade_state.json
+context7.json
+storage.json
+project_registry.json
 server.pid
+server_output.log
 
 # AI Memory
 memory/

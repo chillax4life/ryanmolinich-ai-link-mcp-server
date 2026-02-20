@@ -1,4 +1,4 @@
-import { projectTools, handleProjectTool } from './project_tools.js';
+import { projectTools, handleProjectTool } from '../project_tools.js';
 
 async function test() {
     console.log("Testing Project Tools...");

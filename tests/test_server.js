@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { spawn } from 'child_process';
 
-const server = spawn('node', ['index.js']);
+const server = spawn('node', ['../index.js']);
 
 setTimeout(() => {
   const testMsg = {

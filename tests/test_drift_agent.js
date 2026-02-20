@@ -1,4 +1,4 @@
-import { DriftAgent } from './agents/DriftAgent.js';
+import { DriftAgent } from '../agents/DriftAgent.js';
 import sdk from '@drift-labs/sdk';
 const { PositionDirection, BN } = sdk;
 console.log("SDK Exports:", Object.keys(sdk));

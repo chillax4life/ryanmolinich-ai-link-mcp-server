@@ -11,8 +11,17 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Security Configuration
-const API_KEY = process.env.AI_LINK_API_KEY || 'ai-link-secure-key';
+// Security Configuration — refuse to start without a real API key
+if (!process.env.AI_LINK_API_KEY) {
+    console.error('🚨 FATAL: AI_LINK_API_KEY environment variable is not set.');
+    console.error('   Set it in your .env file or export it before starting the server.');
+    console.error('   Example: export AI_LINK_API_KEY=$(openssl rand -hex 32)');
+    // Only exit when running standalone; when imported, let the caller handle it
+    if (import.meta.url === `file://${process.argv[1]}`) {
+        process.exit(1);
+    }
+}
+const API_KEY = process.env.AI_LINK_API_KEY;
 
 // Middleware
 app.use(cors());
@@ -202,9 +211,6 @@ export function startApiServer() {
         app.listen(PORT, '0.0.0.0', () => {
             console.error(`🔒 API Server running on port ${PORT}`);
             console.error(`🌍 Remote Access Enabled: Listening on 0.0.0.0`);
-            if (!process.env.AI_LINK_API_KEY) {
-                console.warn('⚠️  WARNING: Using default API Key "ai-link-secure-key". Set AI_LINK_API_KEY env var to secure.');
-            }
             resolve();
         });
     });

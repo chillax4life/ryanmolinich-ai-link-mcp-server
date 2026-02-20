@@ -1,4 +1,4 @@
-import { PriceOracleAgent } from './agents/PriceOracleAgent.js';
+import { PriceOracleAgent } from '../agents/PriceOracleAgent.js';
 
 async function runTest() {
     console.log("👁️ Testing Price Oracle Agent (The Eyes)...");

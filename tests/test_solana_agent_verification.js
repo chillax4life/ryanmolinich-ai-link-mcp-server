@@ -1,4 +1,4 @@
-import { SolanaAgent } from './agents/SolanaAgent.js';
+import { SolanaAgent } from '../agents/SolanaAgent.js';
 
 async function runTest() {
     console.log("Bone Glass Verification 🦴🥃");

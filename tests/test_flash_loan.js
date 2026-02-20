@@ -1,4 +1,4 @@
-import { FlashLoanAgent } from './agents/FlashLoanAgent.js';
+import { FlashLoanAgent } from '../agents/FlashLoanAgent.js';
 
 async function runTest() {
     console.log("💰 Testing Flash Loan Agent (The Financier)...");

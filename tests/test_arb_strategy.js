@@ -1,4 +1,4 @@
-import { FlashArbAgent } from './agents/FlashArbAgent.js';
+import { FlashArbAgent } from '../agents/FlashArbAgent.js';
 
 async function runTest() {
     console.log("🧠 Testing Flash Arb Strategy...");
