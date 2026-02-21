@@ -7,7 +7,10 @@
         "strict": true,
         "skipLibCheck": true,
         "forceConsistentCasingInFileNames": true,
-        "outDir": "./dist"
+        "outDir": "./dist",
+        "allowJs": true,
+        "checkJs": false,
+        "noImplicitAny": false
     },
     "ts-node": {
         "esm": true,
@@ -15,5 +18,11 @@
     },
     "include": [
         "**/*.ts"
+    ],
+    "exclude": [
+        "node_modules",
+        "dist",
+        "_archived",
+        "agent_hub.ts"
     ]
 }
