@@ -1,5 +1,6 @@
 import { Agent } from './AgentFramework.js';
 import { Connection, Keypair, PublicKey } from '@solana/web3.js';
+import bs58 from 'bs58';
 import fs from 'fs';
 import path from 'path';
 
@@ -45,11 +46,13 @@ export class SolanaAgent extends Agent {
                 console.log(`[${this.name}] Loaded Wallet from file: ${this.keypair.publicKey.toBase58()}`);
             } else if (process.env.SOLANA_PRIVATE_KEY) {
                 // Load from Env (Base58 string)
-                // Need bs58 decode validation? Assume JSON array for simplicity or implement decoding
-                // For now, let's assume JSON array in env or investigate helpers
-                // Typically env vars are base58 strings. 
-                // Let's defer to file for now as primary.
-                console.warn(`[${this.name}] Env loading not fully implemented, strictly using file path if provided.`);
+                try {
+                    const secretKey = bs58.decode(process.env.SOLANA_PRIVATE_KEY);
+                    this.keypair = Keypair.fromSecretKey(secretKey);
+                    console.log(`[${this.name}] Loaded Wallet from environment: ${this.keypair.publicKey.toBase58()}`);
+                } catch (e) {
+                    console.error(`[${this.name}] Failed to decode SOLANA_PRIVATE_KEY: ${e.message}`);
+                }
             } else {
                 console.warn(`[${this.name}] No wallet provided. Running in Read-Only mode.`);
             }

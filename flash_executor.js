@@ -1,6 +1,7 @@
 import { Connection, Keypair, PublicKey, TransactionInstruction, ComputeBudgetProgram } from '@solana/web3.js';
 import { AnchorProvider, Wallet, BN } from '@coral-xyz/anchor';
 import { PerpetualsClient, PoolConfig, Privilege, Side } from 'flash-sdk';
+import bs58 from 'bs58';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -33,10 +34,19 @@ export async function initializeFlashExecutor(config = {}) {
             // Set ANCHOR_WALLET env var for SDK internal use
             process.env.ANCHOR_WALLET = walletPath;
             
-            console.log(`[FlashExecutor] Wallet loaded: ${wallet.publicKey.toBase58()}`);
+            console.log(`[FlashExecutor] Wallet loaded from file: ${wallet.publicKey.toBase58()}`);
         } catch (e) {
-            console.error(`[FlashExecutor] Failed to load wallet: ${e.message}`);
+            console.error(`[FlashExecutor] Failed to load wallet file: ${e.message}`);
             return { initialized: false, error: 'Wallet load failed' };
+        }
+    } else if (process.env.SOLANA_PRIVATE_KEY) {
+        try {
+            const secretKey = bs58.decode(process.env.SOLANA_PRIVATE_KEY);
+            wallet = new Wallet(Keypair.fromSecretKey(secretKey));
+            console.log(`[FlashExecutor] Wallet loaded from environment: ${wallet.publicKey.toBase58()}`);
+        } catch (e) {
+            console.error(`[FlashExecutor] Failed to decode SOLANA_PRIVATE_KEY: ${e.message}`);
+            return { initialized: false, error: 'Wallet decode failed' };
         }
     } else if (process.env.TRADING_MODE === 'paper') {
         console.warn('[FlashExecutor] No wallet found. Using DUMMY wallet for PAPER MODE.');

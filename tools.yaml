@@ -1,0 +1,12 @@
+# Custom tools configuration for AI agents
+tools:
+  - name: echo_tool
+    description: A simple tool that returns the input message.
+    parameters:
+      type: object
+      properties:
+        message:
+          type: string
+          description: The message to echo.
+      required:
+        - message
